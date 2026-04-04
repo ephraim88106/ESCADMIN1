@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { STORES } from '../data/stores';
-import { isFirebaseConfigured } from '../firebase';
 
 function getLocalData(key) {
   try { return JSON.parse(localStorage.getItem(key) || '[]'); }
@@ -56,12 +55,6 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
       <h2>종합 대시보드</h2>
-
-      {!isFirebaseConfigured && (
-        <div className="notice">
-          Firebase 미연결 상태입니다. 현재 브라우저 로컬 저장소를 사용 중입니다.
-        </div>
-      )}
 
       <div className="summary-cards">
         <div className="summary-card">
