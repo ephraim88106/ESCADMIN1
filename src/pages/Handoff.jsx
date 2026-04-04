@@ -3,14 +3,107 @@ import { useParams } from 'react-router-dom';
 import { getStoreById } from '../data/stores';
 import { useHandoffs } from '../hooks/useFirestore';
 
-const SECTION_TYPES = [
-  { type: 'fixed_seats', label: '고정석', placeholder: '11, 12, 14, 15, 17, 18, 19, 46, 47, 48' },
-  { type: 'temperature', label: '온도체크', placeholder: '카페테리아(냉장고위) 25.3\n24번 23.5\n37-38번 23.9' },
-  { type: 'empty_seats', label: '빈자리', placeholder: 'X 또는 빈자리 번호' },
-  { type: 'orders', label: '주문/발주', placeholder: '주방세제 #긴급 (재고0, 개봉0)' },
-  { type: 'cleaning', label: '청소', placeholder: '청소 완료 여부, 특이사항' },
-  { type: 'memo', label: '기타 메모', placeholder: '기타 전달사항' },
-];
+// 메시지를 카테고리별로 자동 파싱
+function parseMessage(text) {
+  const sections = [];
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+
+  let current = null;
+
+  for (const line of lines) {
+    // ■매장명(청소일정) — 청소 일정
+    if (line.startsWith('■')) {
+      const cleanMatch = line.match(/\(([^)]*청소[^)]*)\)/);
+      if (cleanMatch) {
+        sections.push({
+          label: '청소 일정',
+          content: cleanMatch[1],
+          checked: false,
+        });
+      }
+      // 매장명 헤더는 별도 저장하지 않음
+      current = null;
+      continue;
+    }
+
+    // [고정석 ...] — 고정석
+    if (line.startsWith('[') && line.includes('고정석')) {
+      const seats = line.replace(/[\[\]]/g, '').replace('고정석', '').trim();
+      sections.push({
+        label: '고정석',
+        content: seats,
+        checked: false,
+      });
+      current = null;
+      continue;
+    }
+
+    // "빈자리" 키워드
+    if (/^빈\s?자리$/i.test(line)) {
+      current = { label: '빈자리', lines: [] };
+      continue;
+    }
+    if (current?.label === '빈자리') {
+      current.lines.push(line);
+      sections.push({
+        label: '빈자리',
+        content: current.lines.join('\n'),
+        checked: false,
+      });
+      current = null;
+      continue;
+    }
+
+    // "주문" 키워드
+    if (/^주문$/i.test(line)) {
+      current = { label: '주문/발주', lines: [] };
+      continue;
+    }
+    if (current?.label === '주문/발주') {
+      current.lines.push(line);
+      continue;
+    }
+
+    // 온도 패턴: 숫자.숫자 가 포함된 줄
+    if (/\d+\.\d/.test(line) && /번|카페|냉장/.test(line)) {
+      // 온도체크 섹션에 모아서 추가
+      const existing = sections.find((s) => s.label === '온도체크');
+      if (existing) {
+        existing.content += '\n' + line;
+      } else {
+        sections.push({
+          label: '온도체크',
+          content: line,
+          checked: false,
+        });
+      }
+      continue;
+    }
+
+    // 그 외 — 기타 메모
+    const memo = sections.find((s) => s.label === '기타');
+    if (memo) {
+      memo.content += '\n' + line;
+    } else {
+      sections.push({
+        label: '기타',
+        content: line,
+        checked: false,
+      });
+    }
+  }
+
+  // 주문/발주 마무리 (current가 남아있을 때)
+  if (current?.label === '주문/발주' && current.lines.length > 0) {
+    sections.push({
+      label: '주문/발주',
+      content: current.lines.join('\n'),
+      checked: false,
+    });
+  }
+
+  return sections;
+}
 
 function formatTime(ts) {
   const d = new Date(ts);
@@ -21,11 +114,19 @@ function formatTime(ts) {
   return `${month}/${day} ${h}:${m}`;
 }
 
-function hasUrgent(content) {
-  return content.includes('#긴급');
-}
+const SAMPLE = `■화곡점(월 수 금 일 청소)
+[고정석 11, 12, 14, 15, 17, 18, 19, 46, 47, 48]
 
-const EMPTY_FORM = Object.fromEntries(SECTION_TYPES.map((s) => [s.type, '']));
+카페테리아(냉장고위) 25.3
+24번 23.5
+37-38번 23.9
+04번 24.3
+
+빈자리
+X
+
+주문
+주방세제 #긴급 (재고0, 개봉0)`;
 
 export default function Handoff() {
   const { storeId } = useParams();
@@ -35,38 +136,32 @@ export default function Handoff() {
 
   const [showForm, setShowForm] = useState(false);
   const [author, setAuthor] = useState('');
-  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [rawText, setRawText] = useState('');
+  const [preview, setPreview] = useState(null);
   const [expandedIds, setExpandedIds] = useState(new Set());
 
   if (!store) return <p>지점을 찾을 수 없습니다.</p>;
 
-  // 가장 최근 미확인 인수인계
-  const pending = handoffs.find((h) => !h.checkedBy);
+  const pending = handoffs.filter((h) => !h.checkedBy);
   const history = handoffs.filter((h) => h.checkedBy);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!author.trim()) return;
+  const handleParse = () => {
+    if (!rawText.trim()) return;
+    const sections = parseMessage(rawText);
+    setPreview(sections);
+  };
 
-    const sections = SECTION_TYPES
-      .filter((s) => form[s.type].trim())
-      .map((s) => ({
-        type: s.type,
-        label: s.label,
-        content: form[s.type].trim(),
-        checked: false,
-      }));
-
-    if (sections.length === 0) return;
-
+  const handleSubmit = async () => {
+    if (!author.trim() || !preview || preview.length === 0) return;
     await addHandoff({
       author: author.trim(),
-      sections,
+      rawText,
+      sections: preview,
       checkedBy: null,
       checkedAt: null,
     });
-
-    setForm({ ...EMPTY_FORM });
+    setRawText('');
+    setPreview(null);
     setShowForm(false);
   };
 
@@ -80,7 +175,6 @@ export default function Handoff() {
   const handleConfirmAll = async (handoff) => {
     const checkerName = window.prompt('확인자 이름을 입력하세요:');
     if (!checkerName?.trim()) return;
-
     const allChecked = handoff.sections.map((sec) => ({ ...sec, checked: true }));
     await updateHandoff(handoff.id, {
       sections: allChecked,
@@ -90,7 +184,7 @@ export default function Handoff() {
   };
 
   const handleDelete = async (handoff) => {
-    if (window.confirm('이 인수인계를 삭제하시겠습니까?')) {
+    if (window.confirm('삭제하시겠습니까?')) {
       await removeHandoff(handoff.id);
     }
   };
@@ -107,7 +201,7 @@ export default function Handoff() {
   const renderSections = (handoff, editable) => (
     <div className="handoff-sections">
       {handoff.sections.map((sec, i) => {
-        const urgent = sec.type === 'orders' && hasUrgent(sec.content);
+        const urgent = sec.content.includes('#긴급');
         return (
           <div
             key={i}
@@ -141,18 +235,17 @@ export default function Handoff() {
   return (
     <div className="handoff-page">
       <div className="page-header">
-        <h2>{store.name} - 인수인계</h2>
+        <h2>인수인계</h2>
         <button
           className="btn-primary"
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => { setShowForm(!showForm); setPreview(null); }}
         >
           {showForm ? '취소' : '+ 새 인수인계'}
         </button>
       </div>
 
-      {/* 작성 폼 */}
       {showForm && (
-        <form className="handoff-form" onSubmit={handleSubmit}>
+        <div className="handoff-form">
           <label>
             작성자
             <input
@@ -160,86 +253,81 @@ export default function Handoff() {
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
               placeholder="이름"
-              required
             />
           </label>
-          {SECTION_TYPES.map((s) => (
-            <label key={s.type}>
-              {s.label}
-              <textarea
-                value={form[s.type]}
-                onChange={(e) =>
-                  setForm({ ...form, [s.type]: e.target.value })
-                }
-                placeholder={s.placeholder}
-                rows={s.type === 'temperature' || s.type === 'memo' ? 3 : 1}
-              />
-            </label>
-          ))}
-          <button type="submit" className="btn-primary">
-            인수인계 등록
+          <label>
+            메시지 붙여넣기
+            <textarea
+              value={rawText}
+              onChange={(e) => { setRawText(e.target.value); setPreview(null); }}
+              placeholder={SAMPLE}
+              rows={8}
+            />
+          </label>
+          <button type="button" className="btn-secondary parse-btn" onClick={handleParse}>
+            미리보기
           </button>
-        </form>
+
+          {preview && (
+            <div className="parse-preview">
+              <div className="preview-title">파싱 결과</div>
+              {preview.map((sec, i) => (
+                <div key={i} className={`handoff-section${sec.content.includes('#긴급') ? ' urgent' : ''}`}>
+                  <div className="section-label">{sec.label}</div>
+                  <pre className="section-content">{sec.content}</pre>
+                </div>
+              ))}
+              <button type="button" className="btn-primary" onClick={handleSubmit}>
+                인수인계 등록
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {loading ? (
         <p className="loading">불러오는 중...</p>
-      ) : handoffs.length === 0 && !showForm ? (
-        <p className="empty-state">인수인계 기록이 없습니다. 새 인수인계를 작성해주세요.</p>
+      ) : pending.length === 0 && history.length === 0 && !showForm ? (
+        <p className="empty-state">인수인계 기록이 없습니다.</p>
       ) : (
         <>
-          {/* 확인 대기 중인 최신 인수인계 */}
-          {pending && (
-            <div className="handoff-card pending-card">
+          {pending.map((h) => (
+            <div key={h.id} className="handoff-card pending-card">
               <div className="handoff-card-header">
                 <div>
                   <span className="handoff-status pending">확인 대기</span>
-                  <strong>{pending.author}</strong>
-                  <span className="handoff-time">{formatTime(pending.createdAt)}</span>
+                  <strong>{h.author}</strong>
+                  <span className="handoff-time">{formatTime(h.createdAt)}</span>
                 </div>
                 <div className="handoff-card-actions">
-                  <button
-                    className="btn-primary btn-confirm"
-                    onClick={() => handleConfirmAll(pending)}
-                  >
-                    전체 확인 완료
+                  <button className="btn-primary btn-confirm" onClick={() => handleConfirmAll(h)}>
+                    확인 완료
                   </button>
-                  <button
-                    className="btn-sm btn-danger"
-                    onClick={() => handleDelete(pending)}
-                  >
+                  <button className="btn-sm btn-danger" onClick={() => handleDelete(h)}>
                     삭제
                   </button>
                 </div>
               </div>
-              {renderSections(pending, true)}
+              {renderSections(h, true)}
               <div className="check-progress">
-                {pending.sections.filter((s) => s.checked).length} / {pending.sections.length} 확인됨
+                {h.sections.filter((s) => s.checked).length} / {h.sections.length} 확인됨
               </div>
             </div>
-          )}
+          ))}
 
-          {/* 이전 기록 */}
           {history.length > 0 && (
             <div className="handoff-history">
               <h3>이전 기록</h3>
               {history.map((h) => (
                 <div key={h.id} className="handoff-card history-card">
-                  <div
-                    className="handoff-card-header clickable"
-                    onClick={() => toggleExpanded(h.id)}
-                  >
+                  <div className="handoff-card-header clickable" onClick={() => toggleExpanded(h.id)}>
                     <div>
                       <span className="handoff-status done">확인 완료</span>
                       <strong>{h.author}</strong>
                       <span className="handoff-time">{formatTime(h.createdAt)}</span>
-                      <span className="handoff-checker">
-                        → {h.checkedBy} ({formatTime(h.checkedAt)})
-                      </span>
+                      <span className="handoff-checker">→ {h.checkedBy}</span>
                     </div>
-                    <span className="expand-icon">
-                      {expandedIds.has(h.id) ? '▲' : '▼'}
-                    </span>
+                    <span className="expand-icon">{expandedIds.has(h.id) ? '▲' : '▼'}</span>
                   </div>
                   {expandedIds.has(h.id) && renderSections(h, false)}
                 </div>

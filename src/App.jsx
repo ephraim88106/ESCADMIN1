@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Schedule from './pages/Schedule';
 import Handoff from './pages/Handoff';
+import Notices from './pages/Notices';
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="/store/:storeId/employees" element={<Employees />} />
           <Route path="/store/:storeId/schedule" element={<Schedule />} />
           <Route path="/store/:storeId/handoff" element={<Handoff />} />
+          <Route path="/store/:storeId/notices" element={<Notices />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

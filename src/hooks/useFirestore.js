@@ -225,3 +225,60 @@ export function useHandoffs(storeId) {
 
   return { handoffs, loading, addHandoff, updateHandoff, removeHandoff };
 }
+
+export function useNotices(storeId) {
+  const localKey = `notices_${storeId}`;
+  const [notices, setNotices] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const refreshLocal = useCallback(() => {
+    const data = getLocalData(localKey);
+    data.sort((a, b) => b.createdAt - a.createdAt);
+    setNotices(data);
+    setLoading(false);
+  }, [localKey]);
+
+  useEffect(() => {
+    if (!storeId) return;
+
+    if (!isFirebaseConfigured) {
+      refreshLocal();
+      return;
+    }
+
+    const q = query(
+      collection(db, 'notices'),
+      where('storeId', '==', storeId)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => b.createdAt - a.createdAt);
+      setNotices(data);
+      setLoading(false);
+    });
+    return unsub;
+  }, [storeId, refreshLocal]);
+
+  const addNotice = async (data) => {
+    const entry = { ...data, storeId, createdAt: Date.now() };
+    if (isFirebaseConfigured) {
+      return addDoc(collection(db, 'notices'), entry);
+    }
+    const list = getLocalData(localKey);
+    list.push({ id: generateId(), ...entry });
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  const removeNotice = async (id) => {
+    if (isFirebaseConfigured) {
+      return deleteDoc(doc(db, 'notices', id));
+    }
+    const list = getLocalData(localKey).filter((n) => n.id !== id);
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  return { notices, loading, addNotice, removeNotice };
+}

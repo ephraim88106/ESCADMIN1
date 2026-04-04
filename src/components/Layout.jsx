@@ -63,6 +63,9 @@ export default function Layout() {
             <NavLink to={`/store/${storeId}/handoff`} className="tab">
               인수인계
             </NavLink>
+            <NavLink to={`/store/${storeId}/notices`} className="tab">
+              공지
+            </NavLink>
           </div>
         )}
         <div className="page-content">
