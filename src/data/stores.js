@@ -15,6 +15,7 @@ export const STORES = [
   { id: 'dohwa', name: '도화점' },
   { id: 'geomam', name: '검암점' },
   { id: 'ganseok', name: '간석점' },
+  { id: 'seogucheong', name: '서구청점' },
 ];
 
 export function getStoreById(id) {
