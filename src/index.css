@@ -763,8 +763,21 @@ body {
 .handoff-history h3 {
   font-size: 15px;
   font-weight: 600;
-  margin: 20px 0 10px;
   color: var(--text-muted);
+  margin: 0;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 20px 0 10px;
+}
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .history-card {

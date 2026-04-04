@@ -235,6 +235,7 @@ export default function Handoff() {
   const [author, setAuthor] = useState('');
   const [rawText, setRawText] = useState('');
   const [preview, setPreview] = useState(null);
+  const [images, setImages] = useState([]);
   const [expandedIds, setExpandedIds] = useState(new Set());
 
   if (!store) return <p>지점을 찾을 수 없습니다.</p>;
@@ -268,13 +269,51 @@ export default function Handoff() {
       author: author.trim() || '미입력',
       rawText,
       sections,
+      images,
       checkedBy: null,
       checkedAt: null,
     });
     setAuthor('');
     setRawText('');
     setPreview(null);
+    setImages([]);
     setShowForm(false);
+  };
+
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxW = 800;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxW) { h = (h * maxW) / w; w = maxW; }
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          setImages((prev) => [...prev, canvas.toDataURL('image/jpeg', 0.7)]);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const removeImage = (idx) => {
+    setImages((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleClearHistory = async () => {
+    if (!window.confirm('확인 완료된 기록을 모두 삭제하시겠습니까?')) return;
+    for (const h of history) {
+      await removeHandoff(h.id);
+    }
   };
 
   const handleToggleCheck = async (handoff, sectionIdx) => {
@@ -403,6 +442,26 @@ export default function Handoff() {
               rows={10}
             />
           </label>
+          <label>
+            사진 첨부
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleImageUpload}
+              className="file-input"
+            />
+          </label>
+          {images.length > 0 && (
+            <div className="image-preview-list">
+              {images.map((src, i) => (
+                <div key={i} className="image-preview-item">
+                  <img src={src} alt="" />
+                  <button type="button" className="image-remove" onClick={() => removeImage(i)}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="form-actions">
             <button type="button" className="btn-secondary" onClick={handleParse}>
               미리보기
@@ -456,6 +515,13 @@ export default function Handoff() {
                 </div>
               </div>
               {renderSections(h, true)}
+              {h.images?.length > 0 && (
+                <div className="notice-images">
+                  {h.images.map((src, i) => (
+                    <img key={i} src={src} alt="" className="notice-image" />
+                  ))}
+                </div>
+              )}
               <div className="check-progress">
                 {h.sections.filter((s) => s.checked).length} / {h.sections.length} 확인됨
               </div>
@@ -464,7 +530,12 @@ export default function Handoff() {
 
           {history.length > 0 && (
             <div className="handoff-history">
-              <h3>이전 기록</h3>
+              <div className="history-header">
+                <h3>이전 기록</h3>
+                <button className="btn-sm btn-danger" onClick={handleClearHistory}>
+                  전체 삭제
+                </button>
+              </div>
               {history.map((h) => (
                 <div key={h.id} className="handoff-card history-card">
                   <div className="handoff-card-header clickable" onClick={() => toggleExpanded(h.id)}>
@@ -474,9 +545,23 @@ export default function Handoff() {
                       <span className="handoff-time">{formatTime(h.createdAt)}</span>
                       <span className="handoff-checker">→ {h.checkedBy}</span>
                     </div>
-                    <span className="expand-icon">{expandedIds.has(h.id) ? '▲' : '▼'}</span>
+                    <div className="history-actions" onClick={(e) => e.stopPropagation()}>
+                      <button className="btn-sm btn-danger" onClick={() => handleDelete(h)}>삭제</button>
+                      <span className="expand-icon" onClick={() => toggleExpanded(h.id)}>{expandedIds.has(h.id) ? '▲' : '▼'}</span>
+                    </div>
                   </div>
-                  {expandedIds.has(h.id) && renderSections(h, false)}
+                  {expandedIds.has(h.id) && (
+                    <>
+                      {renderSections(h, false)}
+                      {h.images?.length > 0 && (
+                        <div className="notice-images">
+                          {h.images.map((src, i) => (
+                            <img key={i} src={src} alt="" className="notice-image" />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               ))}
             </div>
