@@ -334,6 +334,21 @@ export default function Handoff() {
     });
   };
 
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('복사되었습니다');
+    }).catch(() => {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      alert('복사되었습니다');
+    });
+  };
+
   const handleDelete = async (handoff) => {
     if (window.confirm('삭제하시겠습니까?')) {
       await removeHandoff(handoff.id);
@@ -514,6 +529,15 @@ export default function Handoff() {
                   </button>
                 </div>
               </div>
+              {h.rawText && (
+                <div className="raw-text-box">
+                  <div className="raw-text-header">
+                    <span className="raw-text-label">원본 메시지</span>
+                    <button className="btn-sm btn-copy" onClick={() => handleCopy(h.rawText)}>복사</button>
+                  </div>
+                  <pre className="raw-text-content">{h.rawText}</pre>
+                </div>
+              )}
               {renderSections(h, true)}
               {h.images?.length > 0 && (
                 <div className="notice-images">
@@ -552,6 +576,15 @@ export default function Handoff() {
                   </div>
                   {expandedIds.has(h.id) && (
                     <>
+                      {h.rawText && (
+                        <div className="raw-text-box">
+                          <div className="raw-text-header">
+                            <span className="raw-text-label">원본 메시지</span>
+                            <button className="btn-sm btn-copy" onClick={(e) => { e.stopPropagation(); handleCopy(h.rawText); }}>복사</button>
+                          </div>
+                          <pre className="raw-text-content">{h.rawText}</pre>
+                        </div>
+                      )}
                       {renderSections(h, false)}
                       {h.images?.length > 0 && (
                         <div className="notice-images">
