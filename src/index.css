@@ -783,6 +783,58 @@ body {
   padding: 10px;
 }
 
+/* === Notice Alert in Handoff === */
+.notice-alert {
+  background: #eff6ff;
+  border: 2px solid #93c5fd;
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.notice-alert-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1e40af;
+  margin-bottom: 8px;
+}
+
+.notice-alert-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  background: var(--card-bg);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.notice-alert-item:last-child {
+  margin-bottom: 0;
+}
+
+.notice-alert-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice-alert-content strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.notice-alert-content .section-content {
+  font-size: 12px;
+  margin: 0 0 4px;
+}
+
+.notice-alert-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
 .parse-preview {
   border-top: 1px solid var(--border);
   padding-top: 12px;

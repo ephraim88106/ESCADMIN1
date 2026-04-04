@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getStoreById } from '../data/stores';
-import { useHandoffs } from '../hooks/useFirestore';
+import { useHandoffs, useNotices } from '../hooks/useFirestore';
 
 // ===== 자동 파서 =====
 function parseMessage(text) {
@@ -229,6 +229,7 @@ export default function Handoff() {
   const store = getStoreById(storeId);
   const { handoffs, loading, addHandoff, updateHandoff, removeHandoff } =
     useHandoffs(storeId);
+  const { notices, updateNotice } = useNotices(storeId);
 
   const [showForm, setShowForm] = useState(false);
   const [author, setAuthor] = useState('');
@@ -240,6 +241,19 @@ export default function Handoff() {
 
   const pending = handoffs.filter((h) => !h.checkedBy);
   const history = handoffs.filter((h) => h.checkedBy);
+
+  // 이 매장에 해당하는 미확인 공지
+  const uncheckedNotices = notices.filter(
+    (n) => !(n.checkedStores || []).includes(storeId)
+  );
+
+  const handleNoticeCheck = async (notice) => {
+    const already = notice.checkedStores || [];
+    if (already.includes(storeId)) return;
+    await updateNotice(notice.id, {
+      checkedStores: [...already, storeId],
+    });
+  };
 
   const handleParse = () => {
     if (!rawText.trim()) return;
@@ -342,6 +356,25 @@ export default function Handoff() {
           {showForm ? '취소' : '+ 새 인수인계'}
         </button>
       </div>
+
+      {/* 미확인 공지 알림 */}
+      {uncheckedNotices.length > 0 && (
+        <div className="notice-alert">
+          <div className="notice-alert-title">📢 공지사항 ({uncheckedNotices.length}건)</div>
+          {uncheckedNotices.map((n) => (
+            <div key={n.id} className="notice-alert-item">
+              <div className="notice-alert-content">
+                <strong>{n.title || '공지사항'}</strong>
+                <pre className="section-content">{n.content}</pre>
+                <span className="notice-alert-meta">{n.author} · {formatTime(n.createdAt)}</span>
+              </div>
+              <button className="btn-sm btn-check" onClick={() => handleNoticeCheck(n)}>
+                확인
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {showForm && (
         <div className="handoff-form">
