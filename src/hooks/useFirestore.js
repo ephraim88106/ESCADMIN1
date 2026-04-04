@@ -227,46 +227,57 @@ export function useHandoffs(storeId) {
 }
 
 export function useNotices(storeId) {
-  const localKey = `notices_${storeId}`;
+  const localKey = 'notices_global';
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const refreshLocal = useCallback(() => {
-    const data = getLocalData(localKey);
-    data.sort((a, b) => b.createdAt - a.createdAt);
-    setNotices(data);
+    const all = getLocalData(localKey);
+    // 이 매장이 대상에 포함된 공지만 필터
+    const filtered = storeId
+      ? all.filter((n) => n.targetStores?.includes(storeId))
+      : all;
+    filtered.sort((a, b) => b.createdAt - a.createdAt);
+    setNotices(filtered);
     setLoading(false);
-  }, [localKey]);
+  }, [localKey, storeId]);
 
   useEffect(() => {
-    if (!storeId) return;
-
     if (!isFirebaseConfigured) {
       refreshLocal();
       return;
     }
 
-    const q = query(
-      collection(db, 'notices'),
-      where('storeId', '==', storeId)
-    );
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => b.createdAt - a.createdAt);
-      setNotices(data);
+    const unsub = onSnapshot(collection(db, 'notices'), (snapshot) => {
+      const all = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const filtered = storeId
+        ? all.filter((n) => n.targetStores?.includes(storeId))
+        : all;
+      filtered.sort((a, b) => b.createdAt - a.createdAt);
+      setNotices(filtered);
       setLoading(false);
     });
     return unsub;
   }, [storeId, refreshLocal]);
 
   const addNotice = async (data) => {
-    const entry = { ...data, storeId, createdAt: Date.now() };
+    const entry = { ...data, createdAt: Date.now() };
     if (isFirebaseConfigured) {
       return addDoc(collection(db, 'notices'), entry);
     }
     const list = getLocalData(localKey);
     list.push({ id: generateId(), ...entry });
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  const updateNotice = async (id, data) => {
+    if (isFirebaseConfigured) {
+      return updateDoc(doc(db, 'notices', id), data);
+    }
+    const list = getLocalData(localKey).map((n) =>
+      n.id === id ? { ...n, ...data } : n
+    );
     setLocalData(localKey, list);
     refreshLocal();
   };
@@ -280,5 +291,5 @@ export function useNotices(storeId) {
     refreshLocal();
   };
 
-  return { notices, loading, addNotice, removeNotice };
+  return { notices, loading, addNotice, updateNotice, removeNotice };
 }

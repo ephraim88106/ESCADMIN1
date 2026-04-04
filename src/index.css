@@ -917,12 +917,74 @@ body {
   margin: 0;
 }
 
+.notice-card.notice-checked {
+  opacity: 0.6;
+}
+
+.notice-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.new-badge {
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.btn-check {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  font-weight: 600;
+}
+
+.btn-checked {
+  background: #d1fae5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.detected-stores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.store-chip {
+  display: inline-block;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.store-chip.all {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
 .notice-meta {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.notice-targets {
+  color: var(--text-muted);
 }
 
 /* === Desktop === */
