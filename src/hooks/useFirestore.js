@@ -157,3 +157,71 @@ export function useSchedules(storeId, year, month) {
 
   return { schedules, loading, addSchedule, updateSchedule, removeSchedule };
 }
+
+export function useHandoffs(storeId) {
+  const localKey = `handoffs_${storeId}`;
+  const [handoffs, setHandoffs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const refreshLocal = useCallback(() => {
+    const data = getLocalData(localKey);
+    data.sort((a, b) => b.createdAt - a.createdAt);
+    setHandoffs(data);
+    setLoading(false);
+  }, [localKey]);
+
+  useEffect(() => {
+    if (!storeId) return;
+
+    if (!isFirebaseConfigured) {
+      refreshLocal();
+      return;
+    }
+
+    const q = query(
+      collection(db, 'handoffs'),
+      where('storeId', '==', storeId)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => b.createdAt - a.createdAt);
+      setHandoffs(data);
+      setLoading(false);
+    });
+    return unsub;
+  }, [storeId, refreshLocal]);
+
+  const addHandoff = async (data) => {
+    const entry = { ...data, storeId, createdAt: Date.now() };
+    if (isFirebaseConfigured) {
+      return addDoc(collection(db, 'handoffs'), entry);
+    }
+    const list = getLocalData(localKey);
+    list.push({ id: generateId(), ...entry });
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  const updateHandoff = async (id, data) => {
+    if (isFirebaseConfigured) {
+      return updateDoc(doc(db, 'handoffs', id), data);
+    }
+    const list = getLocalData(localKey).map((h) =>
+      h.id === id ? { ...h, ...data } : h
+    );
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  const removeHandoff = async (id) => {
+    if (isFirebaseConfigured) {
+      return deleteDoc(doc(db, 'handoffs', id));
+    }
+    const list = getLocalData(localKey).filter((h) => h.id !== id);
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  return { handoffs, loading, addHandoff, updateHandoff, removeHandoff };
+}

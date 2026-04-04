@@ -36,6 +36,9 @@ export default function Layout() {
             <NavLink to={`/store/${storeId}/schedule`} className="tab">
               스케줄 관리
             </NavLink>
+            <NavLink to={`/store/${storeId}/handoff`} className="tab">
+              인수인계
+            </NavLink>
           </div>
         )}
         <div className="page-content">
