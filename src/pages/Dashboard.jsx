@@ -1,78 +1,57 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../firebase';
 import { STORES } from '../data/stores';
+import { isFirebaseConfigured } from '../firebase';
+
+function getLocalData(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+  catch { return []; }
+}
 
 export default function Dashboard() {
   const [storeSummary, setStoreSummary] = useState(
-    STORES.map((s) => ({ ...s, employeeCount: 0, scheduledShifts: 0 }))
+    STORES.map((s) => ({ ...s, noticeCount: 0, uncheckedNotices: 0, handoffPending: false }))
   );
+  const [totals, setTotals] = useState({ notices: 0, unchecked: 0, pendingHandoffs: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchSummary() {
-      if (!isFirebaseConfigured) {
-        // localStorage에서 집계
-        const summary = STORES.map((store) => {
-          let empCount = 0;
-          let schedCount = 0;
-          try {
-            empCount = JSON.parse(localStorage.getItem(`employees_${store.id}`) || '[]').length;
-          } catch { /* empty */ }
-          try {
-            const now = new Date();
-            const key = `schedules_${store.id}_${now.getFullYear()}_${now.getMonth() + 1}`;
-            schedCount = JSON.parse(localStorage.getItem(key) || '[]').length;
-          } catch { /* empty */ }
-          return { ...store, employeeCount: empCount, scheduledShifts: schedCount };
-        });
-        setStoreSummary(summary);
-        setLoading(false);
-        return;
-      }
+    // localStorage에서 집계
+    const allNotices = getLocalData('notices_global');
 
-      try {
-        const empSnap = await getDocs(collection(db, 'employees'));
-        const empByStore = {};
-        empSnap.docs.forEach((doc) => {
-          const data = doc.data();
-          if (!empByStore[data.storeId]) empByStore[data.storeId] = [];
-          empByStore[data.storeId].push(data);
-        });
+    const summary = STORES.map((store) => {
+      // 이 매장 대상 공지
+      const storeNotices = allNotices.filter((n) =>
+        n.targetStores?.includes(store.id)
+      );
+      const unchecked = storeNotices.filter(
+        (n) => !(n.checkedStores || []).includes(store.id)
+      ).length;
 
-        const now = new Date();
-        const schedSnap = await getDocs(
-          query(
-            collection(db, 'schedules'),
-            where('year', '==', now.getFullYear()),
-            where('month', '==', now.getMonth() + 1)
-          )
-        );
-        const schedByStore = {};
-        schedSnap.docs.forEach((doc) => {
-          const data = doc.data();
-          if (!schedByStore[data.storeId]) schedByStore[data.storeId] = 0;
-          schedByStore[data.storeId]++;
-        });
+      // 인수인계 미확인
+      const handoffs = getLocalData(`handoffs_${store.id}`);
+      const pendingCount = handoffs.filter((h) => !h.checkedBy).length;
 
-        setStoreSummary(
-          STORES.map((store) => ({
-            ...store,
-            employeeCount: empByStore[store.id]?.length || 0,
-            scheduledShifts: schedByStore[store.id] || 0,
-          }))
-        );
-      } catch {
-        setStoreSummary(STORES.map((s) => ({ ...s, employeeCount: 0, scheduledShifts: 0 })));
-      }
-      setLoading(false);
-    }
-    fetchSummary();
+      return {
+        ...store,
+        noticeCount: storeNotices.length,
+        uncheckedNotices: unchecked,
+        handoffPending: pendingCount > 0,
+        handoffPendingCount: pendingCount,
+      };
+    });
+
+    const totalUnchecked = summary.reduce((a, b) => a + b.uncheckedNotices, 0);
+    const totalPending = summary.reduce((a, b) => a + b.handoffPendingCount, 0);
+
+    setStoreSummary(summary);
+    setTotals({
+      notices: allNotices.length,
+      unchecked: totalUnchecked,
+      pendingHandoffs: totalPending,
+    });
+    setLoading(false);
   }, []);
-
-  const totalEmployees = storeSummary.reduce((a, b) => a + b.employeeCount, 0);
-  const totalShifts = storeSummary.reduce((a, b) => a + b.scheduledShifts, 0);
 
   return (
     <div className="dashboard">
@@ -90,15 +69,15 @@ export default function Dashboard() {
           <div className="summary-value">{STORES.length}개</div>
         </div>
         <div className="summary-card">
-          <div className="summary-label">전체 직원</div>
-          <div className="summary-value">
-            {loading ? '...' : `${totalEmployees}명`}
+          <div className="summary-label">미확인 공지</div>
+          <div className={`summary-value${totals.unchecked > 0 ? ' text-danger' : ''}`}>
+            {loading ? '...' : `${totals.unchecked}건`}
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-label">이번 달 스케줄</div>
-          <div className="summary-value">
-            {loading ? '...' : `${totalShifts}건`}
+          <div className="summary-label">인수인계 대기</div>
+          <div className={`summary-value${totals.pendingHandoffs > 0 ? ' text-warn' : ''}`}>
+            {loading ? '...' : `${totals.pendingHandoffs}건`}
           </div>
         </div>
       </div>
@@ -108,13 +87,20 @@ export default function Dashboard() {
         {storeSummary.map((store) => (
           <Link
             key={store.id}
-            to={`/store/${store.id}/employees`}
-            className="store-card"
+            to={`/store/${store.id}/handoff`}
+            className={`store-card${store.uncheckedNotices > 0 || store.handoffPending ? ' store-card-alert' : ''}`}
           >
             <div className="store-card-name">{store.name}</div>
             <div className="store-card-stats">
-              <span>직원 {store.employeeCount}명</span>
-              <span>스케줄 {store.scheduledShifts}건</span>
+              {store.uncheckedNotices > 0 && (
+                <span className="stat-badge stat-danger">공지 {store.uncheckedNotices}</span>
+              )}
+              {store.handoffPending && (
+                <span className="stat-badge stat-warn">인수인계 {store.handoffPendingCount}</span>
+              )}
+              {store.uncheckedNotices === 0 && !store.handoffPending && (
+                <span className="stat-ok">✓ 확인 완료</span>
+              )}
             </div>
           </Link>
         ))}

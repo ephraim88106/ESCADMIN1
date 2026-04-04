@@ -37,6 +37,7 @@ export default function Notices() {
   const [targetInput, setTargetInput] = useState('');
   const [pinned, setPinned] = useState(false);
   const [detectedStores, setDetectedStores] = useState([]);
+  const [images, setImages] = useState([]);
 
   if (!store) return <p>지점을 찾을 수 없습니다.</p>;
 
@@ -59,17 +60,50 @@ export default function Notices() {
       author: author.trim() || '관리자',
       title: title.trim() || '공지사항',
       content: content.trim(),
+      images,
       targetStores: targets,
-      checkedStores: [], // 확인한 매장 목록
+      checkedStores: [],
       pinned,
     });
     setAuthor('');
     setTitle('');
     setContent('');
+    setImages([]);
     setTargetInput('');
     setDetectedStores([]);
     setPinned(false);
     setShowForm(false);
+  };
+
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        // 리사이즈해서 저장 (localStorage 용량 절약)
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxW = 800;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxW) { h = (h * maxW) / w; w = maxW; }
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setImages((prev) => [...prev, dataUrl]);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const removeImage = (idx) => {
+    setImages((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleCheck = async (notice) => {
@@ -168,6 +202,26 @@ export default function Notices() {
               required
             />
           </label>
+          <label>
+            사진 첨부
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleImageUpload}
+              className="file-input"
+            />
+          </label>
+          {images.length > 0 && (
+            <div className="image-preview-list">
+              {images.map((src, i) => (
+                <div key={i} className="image-preview-item">
+                  <img src={src} alt="" />
+                  <button type="button" className="image-remove" onClick={() => removeImage(i)}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
           <label className="pin-label">
             <input
               type="checkbox"
@@ -218,6 +272,13 @@ export default function Notices() {
                   </div>
                 </div>
                 <pre className="notice-content">{n.content}</pre>
+                {n.images?.length > 0 && (
+                  <div className="notice-images">
+                    {n.images.map((src, i) => (
+                      <img key={i} src={src} alt="" className="notice-image" />
+                    ))}
+                  </div>
+                )}
                 <div className="notice-meta">
                   <span>{n.author} · {formatTime(n.createdAt)}</span>
                   <span className="notice-targets">

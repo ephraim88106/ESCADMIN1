@@ -366,6 +366,13 @@ export default function Handoff() {
               <div className="notice-alert-content">
                 <strong>{n.title || '공지사항'}</strong>
                 <pre className="section-content">{n.content}</pre>
+                {n.images?.length > 0 && (
+                  <div className="notice-images">
+                    {n.images.map((src, i) => (
+                      <img key={i} src={src} alt="" className="notice-image" />
+                    ))}
+                  </div>
+                )}
                 <span className="notice-alert-meta">{n.author} · {formatTime(n.createdAt)}</span>
               </div>
               <button className="btn-sm btn-check" onClick={() => handleNoticeCheck(n)}>
