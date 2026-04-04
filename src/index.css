@@ -771,9 +771,16 @@ body {
   opacity: 0.85;
 }
 
-.parse-btn {
-  width: 100%;
+.form-actions {
+  display: flex;
+  gap: 8px;
   margin-bottom: 12px;
+}
+
+.form-actions .btn-secondary,
+.form-actions .btn-primary {
+  flex: 1;
+  padding: 10px;
 }
 
 .parse-preview {

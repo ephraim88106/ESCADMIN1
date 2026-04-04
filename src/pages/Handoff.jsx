@@ -152,14 +152,17 @@ export default function Handoff() {
   };
 
   const handleSubmit = async () => {
-    if (!author.trim() || !preview || preview.length === 0) return;
+    if (!rawText.trim()) return;
+    const sections = preview || parseMessage(rawText);
+    if (sections.length === 0) return;
     await addHandoff({
-      author: author.trim(),
+      author: author.trim() || '미입력',
       rawText,
-      sections: preview,
+      sections,
       checkedBy: null,
       checkedAt: null,
     });
+    setAuthor('');
     setRawText('');
     setPreview(null);
     setShowForm(false);
@@ -264,9 +267,14 @@ export default function Handoff() {
               rows={8}
             />
           </label>
-          <button type="button" className="btn-secondary parse-btn" onClick={handleParse}>
-            미리보기
-          </button>
+          <div className="form-actions">
+            <button type="button" className="btn-secondary" onClick={handleParse}>
+              미리보기
+            </button>
+            <button type="button" className="btn-primary" onClick={handleSubmit}>
+              바로 등록
+            </button>
+          </div>
 
           {preview && (
             <div className="parse-preview">
