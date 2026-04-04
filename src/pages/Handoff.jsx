@@ -3,106 +3,206 @@ import { useParams } from 'react-router-dom';
 import { getStoreById } from '../data/stores';
 import { useHandoffs } from '../hooks/useFirestore';
 
-// 메시지를 카테고리별로 자동 파싱
+// ===== 자동 파서 =====
 function parseMessage(text) {
-  const sections = [];
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const result = {
+    고정석: [],
+    특이사항: [],
+    온도: [],
+    빈자리: [],
+    주문: [],
+    도착: [],
+    전달: [],
+  };
 
-  let current = null;
+  const lines = text.split('\n');
+  let mode = null; // 현재 섹션 모드
+  let tempZone = ''; // 온도 구역 (스터디, 카페존 등)
 
-  for (const line of lines) {
-    // ■매장명(청소일정) — 청소 일정
-    if (line.startsWith('■')) {
+  for (let raw of lines) {
+    const line = raw.trim();
+    if (!line) { mode = mode; continue; } // 빈줄은 모드 유지
+
+    // --- 매장명 헤더 (스킵) ---
+    if (/^[■●▣]/.test(line) || /^\[.+점\]$/.test(line) || /^.+점\s*$/.test(line) && lines.indexOf(raw) === 0) {
+      // 청소 일정 추출
       const cleanMatch = line.match(/\(([^)]*청소[^)]*)\)/);
       if (cleanMatch) {
-        sections.push({
-          label: '청소 일정',
-          content: cleanMatch[1],
-          checked: false,
-        });
+        result.전달.push('청소 일정: ' + cleanMatch[1]);
       }
-      // 매장명 헤더는 별도 저장하지 않음
-      current = null;
+      // 매장 헤더의 부가정보 (비번 등)
+      const extraMatch = line.match(/\(사무실[^)]+\)/);
+      if (extraMatch) {
+        result.전달.push(extraMatch[0]);
+      }
+      mode = null;
+      tempZone = '';
       continue;
     }
 
-    // [고정석 ...] — 고정석
-    if (line.startsWith('[') && line.includes('고정석')) {
-      const seats = line.replace(/[\[\]]/g, '').replace('고정석', '').trim();
-      sections.push({
-        label: '고정석',
-        content: seats,
-        checked: false,
-      });
-      current = null;
+    // --- 고정석/지정석 ---
+    if (/고정석|지정석/.test(line)) {
+      const seats = line.replace(/.*(?:고정석|지정석)[:\s]*/i, '').replace(/[\[\]()]/g, '').trim();
+      if (seats) result.고정석.push(seats);
+      // 같은 줄에 부가정보가 있으면 (물풀 등)
+      mode = null;
+      continue;
+    }
+    if (/^ㄴ\s*지정석/.test(line)) {
+      const seats = line.replace(/ㄴ\s*지정석[:\s]*/i, '').trim();
+      if (seats) result.고정석.push(seats);
+      mode = null;
+      continue;
+    }
+    // 매장 헤더 바로 다음 (숫자만 있는 괄호) - 고정석일 가능성
+    if (/^\(\d[\d\s,]+\)$/.test(line) && result.고정석.length === 0 && result.온도.length === 0) {
+      result.고정석.push(line.replace(/[()]/g, '').trim());
+      mode = null;
       continue;
     }
 
-    // "빈자리" 키워드
-    if (/^빈\s?자리$/i.test(line)) {
-      current = { label: '빈자리', lines: [] };
+    // --- 특이사항 (▶, ★, ☆, *, 고장, 안꺼짐, 오류, 교체, 금지 등) ---
+    if (/^[▶★☆*]/.test(line)) {
+      result.특이사항.push(line.replace(/^[▶★☆*]\s*/, ''));
+      mode = null;
       continue;
     }
-    if (current?.label === '빈자리') {
-      current.lines.push(line);
-      sections.push({
-        label: '빈자리',
-        content: current.lines.join('\n'),
-        checked: false,
-      });
-      current = null;
+    if (/고장|안꺼짐|안켜짐|오류|교체\s*필요|초기화\s*금지|떨어진|더러움|악취|청소\s*完/.test(line) && !isTemperature(line)) {
+      result.특이사항.push(line.replace(/^[ㄴ]\s*/, ''));
+      mode = null;
       continue;
     }
 
-    // "주문" 키워드
-    if (/^주문$/i.test(line)) {
-      current = { label: '주문/발주', lines: [] };
+    // --- 빈자리/빈좌석 섹션 ---
+    if (/^[ㄴ]?\s*빈\s?(자리|좌석)/i.test(line)) {
+      mode = 'empty';
       continue;
     }
-    if (current?.label === '주문/발주') {
-      current.lines.push(line);
+    if (mode === 'empty') {
+      result.빈자리.push(line);
+      mode = null;
       continue;
     }
 
-    // 온도 패턴: 숫자.숫자 가 포함된 줄
-    if (/\d+\.\d/.test(line) && /번|카페|냉장/.test(line)) {
-      // 온도체크 섹션에 모아서 추가
-      const existing = sections.find((s) => s.label === '온도체크');
-      if (existing) {
-        existing.content += '\n' + line;
+    // --- 주문/이전 주문 섹션 ---
+    if (/^이전\s*주문$|^주문$/i.test(line)) {
+      mode = 'order';
+      continue;
+    }
+    if (mode === 'order') {
+      if (isSectionHeader(line)) {
+        mode = null;
+        // fall through to process this line
       } else {
-        sections.push({
-          label: '온도체크',
-          content: line,
-          checked: false,
-        });
+        result.주문.push(line);
+        continue;
       }
+    }
+
+    // --- 도착 섹션 ---
+    if (/^도착$/i.test(line)) {
+      mode = 'arrive';
+      continue;
+    }
+    if (mode === 'arrive') {
+      if (isSectionHeader(line)) {
+        mode = null;
+        // fall through
+      } else {
+        result.도착.push(line);
+        continue;
+      }
+    }
+
+    // --- 온도 구역 헤더 ---
+    if (/^스터디/i.test(line)) {
+      tempZone = '스터디';
+      mode = 'temp';
+      continue;
+    }
+    if (/^카페(존|테리아)?$|^카페$/i.test(line) || /^\s*카페존/.test(line)) {
+      tempZone = '카페존';
+      mode = 'temp';
       continue;
     }
 
-    // 그 외 — 기타 메모
-    const memo = sections.find((s) => s.label === '기타');
-    if (memo) {
-      memo.content += '\n' + line;
-    } else {
-      sections.push({
-        label: '기타',
-        content: line,
-        checked: false,
-      });
+    // --- 온도 데이터 ---
+    if (isTemperature(line)) {
+      const prefix = tempZone ? `[${tempZone}] ` : '';
+      result.온도.push(prefix + line.replace(/^[ㄴ]\s*/, ''));
+      mode = 'temp';
+      continue;
+    }
+
+    // --- 냉난방기 등 설비 확인 (온도 섹션 내) ---
+    if (mode === 'temp' && /냉난방|가동/.test(line)) {
+      result.온도.push(line.replace(/[\[\]]/g, ''));
+      continue;
+    }
+
+    // --- 나머지 → 전달사항 ---
+    if (line.length > 0) {
+      // 물풀 관련 부가정보
+      if (/^\[물풀|^\[공용/.test(line)) {
+        result.전달.push(line.replace(/[\[\]]/g, ''));
+      } else {
+        result.전달.push(line);
+      }
+      mode = null;
     }
   }
 
-  // 주문/발주 마무리 (current가 남아있을 때)
-  if (current?.label === '주문/발주' && current.lines.length > 0) {
-    sections.push({
-      label: '주문/발주',
-      content: current.lines.join('\n'),
-      checked: false,
-    });
+  // 섹션 배열을 결과로 변환
+  const sections = [];
+  if (result.고정석.length > 0) {
+    sections.push({ label: '고정석', content: result.고정석.join('\n'), checked: false });
+  }
+  if (result.특이사항.length > 0) {
+    sections.push({ label: '특이사항', content: result.특이사항.join('\n'), checked: false });
+  }
+  if (result.온도.length > 0) {
+    sections.push({ label: '온도체크', content: result.온도.join('\n'), checked: false });
+  }
+  if (result.빈자리.length > 0) {
+    sections.push({ label: '빈자리', content: result.빈자리.join('\n'), checked: false });
+  }
+  if (result.주문.length > 0) {
+    const content = result.주문.join('\n');
+    sections.push({ label: '주문/발주', content, checked: false });
+  }
+  if (result.도착.length > 0) {
+    sections.push({ label: '도착', content: result.도착.join('\n'), checked: false });
+  }
+  if (result.전달.length > 0) {
+    sections.push({ label: '전달사항', content: result.전달.join('\n'), checked: false });
   }
 
   return sections;
+}
+
+// 온도 데이터인지 판별
+function isTemperature(line) {
+  const cleaned = line.replace(/^[ㄴ]\s*/, '').trim();
+  // "28 : 24.9" / "05 : 23.1" 패턴
+  if (/^\d+\s*:\s*\d+/.test(cleaned)) return true;
+  // "(11번) 22.7" / "(35번): 24.8 / 32%" 패턴
+  if (/^\(?\d+번\)?\s*[:)]\s*\d+/.test(cleaned)) return true;
+  // "78자리 25.2" / "08자리 25" 패턴
+  if (/\d+\s*자리\s+\d+/.test(cleaned)) return true;
+  // "44: 25" / "55: 24.5" 패턴
+  if (/^\d+\s*:\s*\d+/.test(cleaned)) return true;
+  // "카페테리아 23.4" / "담요위 24.2" / "휴게실 23.0" 등 장소 + 온도
+  if (/(?:카페테리아|담요|휴게실|냉장고|스터디룸|창가|신발장|자리|번\s).*\d{2,}/.test(cleaned)) return true;
+  // "24번 23.8 / 71%" 패턴
+  if (/^\d+번\s+\d{2}/.test(cleaned)) return true;
+  // "(21번) 25" 패턴
+  if (/^\(\d+번\)\s*\d+/.test(cleaned)) return true;
+  return false;
+}
+
+// 다른 섹션 헤더인지 확인
+function isSectionHeader(line) {
+  return /^[ㄴ]?\s*빈\s?(자리|좌석)|^도착$|^주문$|^이전\s*주문$|^스터디|^카페/i.test(line);
 }
 
 function formatTime(ts) {
@@ -114,19 +214,15 @@ function formatTime(ts) {
   return `${month}/${day} ${h}:${m}`;
 }
 
-const SAMPLE = `■화곡점(월 수 금 일 청소)
-[고정석 11, 12, 14, 15, 17, 18, 19, 46, 47, 48]
-
-카페테리아(냉장고위) 25.3
-24번 23.5
-37-38번 23.9
-04번 24.3
-
-빈자리
-X
-
-주문
-주방세제 #긴급 (재고0, 개봉0)`;
+const LABEL_ICONS = {
+  '고정석': '💺',
+  '특이사항': '⚠️',
+  '온도체크': '🌡️',
+  '빈자리': '🪑',
+  '주문/발주': '📦',
+  '도착': '🚚',
+  '전달사항': '📝',
+};
 
 export default function Handoff() {
   const { storeId } = useParams();
@@ -147,8 +243,7 @@ export default function Handoff() {
 
   const handleParse = () => {
     if (!rawText.trim()) return;
-    const sections = parseMessage(rawText);
-    setPreview(sections);
+    setPreview(parseMessage(rawText));
   };
 
   const handleSubmit = async () => {
@@ -204,7 +299,8 @@ export default function Handoff() {
   const renderSections = (handoff, editable) => (
     <div className="handoff-sections">
       {handoff.sections.map((sec, i) => {
-        const urgent = sec.content.includes('#긴급');
+        const urgent = /#긴급|#급/.test(sec.content);
+        const icon = LABEL_ICONS[sec.label] || '📋';
         return (
           <div
             key={i}
@@ -218,12 +314,12 @@ export default function Handoff() {
                     checked={sec.checked}
                     onChange={() => handleToggleCheck(handoff, i)}
                   />
-                  <span className="section-label">{sec.label}</span>
+                  <span className="section-label">{icon} {sec.label}</span>
                   {urgent && <span className="urgent-tag">#긴급</span>}
                 </label>
               ) : (
                 <span className="section-label">
-                  {sec.checked ? '✓ ' : ''}{sec.label}
+                  {sec.checked ? '✓ ' : ''}{icon} {sec.label}
                   {urgent && <span className="urgent-tag">#긴급</span>}
                 </span>
               )}
@@ -255,7 +351,7 @@ export default function Handoff() {
               type="text"
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
-              placeholder="이름"
+              placeholder="이름 (선택)"
             />
           </label>
           <label>
@@ -263,8 +359,8 @@ export default function Handoff() {
             <textarea
               value={rawText}
               onChange={(e) => { setRawText(e.target.value); setPreview(null); }}
-              placeholder={SAMPLE}
-              rows={8}
+              placeholder="카톡/문자 내용을 그대로 붙여넣으세요"
+              rows={10}
             />
           </label>
           <div className="form-actions">
@@ -278,15 +374,18 @@ export default function Handoff() {
 
           {preview && (
             <div className="parse-preview">
-              <div className="preview-title">파싱 결과</div>
-              {preview.map((sec, i) => (
-                <div key={i} className={`handoff-section${sec.content.includes('#긴급') ? ' urgent' : ''}`}>
-                  <div className="section-label">{sec.label}</div>
-                  <pre className="section-content">{sec.content}</pre>
-                </div>
-              ))}
+              <div className="preview-title">분류 결과 ({preview.length}개 항목)</div>
+              {preview.map((sec, i) => {
+                const icon = LABEL_ICONS[sec.label] || '📋';
+                return (
+                  <div key={i} className={`handoff-section${sec.content.includes('#긴급') || sec.content.includes('#급') ? ' urgent' : ''}`}>
+                    <div className="section-label">{icon} {sec.label}</div>
+                    <pre className="section-content">{sec.content}</pre>
+                  </div>
+                );
+              })}
               <button type="button" className="btn-primary" onClick={handleSubmit}>
-                인수인계 등록
+                이대로 등록
               </button>
             </div>
           )}
