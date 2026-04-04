@@ -2,8 +2,6 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  // TODO: Firebase 콘솔에서 발급받은 설정값을 여기에 입력하세요
-  // https://console.firebase.google.com/
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
@@ -12,6 +10,15 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
 };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const isFirebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
+
+let app = null;
+let db = null;
+
+if (isFirebaseConfigured) {
+  app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+}
+
+export { db };
 export default app;

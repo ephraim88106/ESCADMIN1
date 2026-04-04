@@ -1,15 +1,37 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, isFirebaseConfigured } from '../firebase';
 import { STORES } from '../data/stores';
 
 export default function Dashboard() {
-  const [storeSummary, setStoreSummary] = useState([]);
+  const [storeSummary, setStoreSummary] = useState(
+    STORES.map((s) => ({ ...s, employeeCount: 0, scheduledShifts: 0 }))
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchSummary() {
+      if (!isFirebaseConfigured) {
+        // localStorage에서 집계
+        const summary = STORES.map((store) => {
+          let empCount = 0;
+          let schedCount = 0;
+          try {
+            empCount = JSON.parse(localStorage.getItem(`employees_${store.id}`) || '[]').length;
+          } catch { /* empty */ }
+          try {
+            const now = new Date();
+            const key = `schedules_${store.id}_${now.getFullYear()}_${now.getMonth() + 1}`;
+            schedCount = JSON.parse(localStorage.getItem(key) || '[]').length;
+          } catch { /* empty */ }
+          return { ...store, employeeCount: empCount, scheduledShifts: schedCount };
+        });
+        setStoreSummary(summary);
+        setLoading(false);
+        return;
+      }
+
       try {
         const empSnap = await getDocs(collection(db, 'employees'));
         const empByStore = {};
@@ -34,12 +56,13 @@ export default function Dashboard() {
           schedByStore[data.storeId]++;
         });
 
-        const summary = STORES.map((store) => ({
-          ...store,
-          employeeCount: empByStore[store.id]?.length || 0,
-          scheduledShifts: schedByStore[store.id] || 0,
-        }));
-        setStoreSummary(summary);
+        setStoreSummary(
+          STORES.map((store) => ({
+            ...store,
+            employeeCount: empByStore[store.id]?.length || 0,
+            scheduledShifts: schedByStore[store.id] || 0,
+          }))
+        );
       } catch {
         setStoreSummary(STORES.map((s) => ({ ...s, employeeCount: 0, scheduledShifts: 0 })));
       }
@@ -54,6 +77,12 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
       <h2>종합 대시보드</h2>
+
+      {!isFirebaseConfigured && (
+        <div className="notice">
+          Firebase 미연결 상태입니다. 현재 브라우저 로컬 저장소를 사용 중입니다.
+        </div>
+      )}
 
       <div className="summary-cards">
         <div className="summary-card">
