@@ -55,6 +55,7 @@ export default function Employees() {
       ) : employees.length === 0 ? (
         <p className="empty-state">등록된 직원이 없습니다. 직원을 추가해주세요.</p>
       ) : (
+        <div className="table-wrapper">
         <table className="data-table">
           <thead>
             <tr>
@@ -91,6 +92,7 @@ export default function Employees() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {modalOpen && (

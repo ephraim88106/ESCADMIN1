@@ -1,13 +1,36 @@
-import { NavLink, Outlet, useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { NavLink, Outlet, useParams, useLocation } from 'react-router-dom';
 import { STORES, getStoreById } from '../data/stores';
 
 export default function Layout() {
   const { storeId } = useParams();
+  const location = useLocation();
   const currentStore = storeId ? getStoreById(storeId) : null;
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // 페이지 이동 시 메뉴 닫기
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
 
   return (
     <div className="layout">
-      <aside className="sidebar">
+      {/* 모바일 헤더 */}
+      <header className="mobile-header">
+        <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)}>
+          {menuOpen ? '✕' : '☰'}
+        </button>
+        <span className="mobile-title">
+          {currentStore ? currentStore.name : 'ESC Admin'}
+        </span>
+      </header>
+
+      {/* 사이드바 오버레이 */}
+      {menuOpen && (
+        <div className="sidebar-overlay" onClick={() => setMenuOpen(false)} />
+      )}
+
+      <aside className={`sidebar${menuOpen ? ' open' : ''}`}>
         <h1 className="logo">ESC Admin</h1>
         <nav>
           <NavLink to="/" end className="nav-item">
@@ -27,6 +50,7 @@ export default function Layout() {
           ))}
         </nav>
       </aside>
+
       <main className="main-content">
         {currentStore && (
           <div className="store-tabs">
@@ -34,7 +58,7 @@ export default function Layout() {
               직원 관리
             </NavLink>
             <NavLink to={`/store/${storeId}/schedule`} className="tab">
-              스케줄 관리
+              스케줄
             </NavLink>
             <NavLink to={`/store/${storeId}/handoff`} className="tab">
               인수인계
