@@ -60,6 +60,9 @@ export default function Layout() {
             <NavLink to={`/store/${storeId}/notices`} className="tab">
               공지
             </NavLink>
+            <NavLink to={`/store/${storeId}/checklist`} className="tab">
+              체크리스트
+            </NavLink>
           </div>
         )}
         <div className="page-content">

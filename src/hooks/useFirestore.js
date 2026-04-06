@@ -226,6 +226,121 @@ export function useHandoffs(storeId) {
   return { handoffs, loading, addHandoff, updateHandoff, removeHandoff };
 }
 
+export function useChecklist(storeId, dateKey) {
+  const localKey = `checklist_${storeId}_${dateKey}`;
+  const [record, setRecord] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const refreshLocal = useCallback(() => {
+    const list = getLocalData(localKey);
+    setRecord(list[0] || null);
+    setLoading(false);
+  }, [localKey]);
+
+  useEffect(() => {
+    if (!storeId || !dateKey) return;
+
+    if (!isFirebaseConfigured) {
+      refreshLocal();
+      return;
+    }
+
+    const q = query(
+      collection(db, 'checklists'),
+      where('storeId', '==', storeId),
+      where('dateKey', '==', dateKey)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setRecord(docs[0] || null);
+      setLoading(false);
+    });
+    return unsub;
+  }, [storeId, dateKey, refreshLocal]);
+
+  const saveChecklist = async (data) => {
+    if (isFirebaseConfigured) {
+      if (record?.id) {
+        return updateDoc(doc(db, 'checklists', record.id), data);
+      }
+      return addDoc(collection(db, 'checklists'), {
+        ...data,
+        storeId,
+        dateKey,
+        createdAt: Date.now(),
+      });
+    }
+    const list = getLocalData(localKey);
+    if (list[0]) {
+      list[0] = { ...list[0], ...data };
+    } else {
+      list.push({ id: generateId(), ...data, storeId, dateKey, createdAt: Date.now() });
+    }
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  return { record, loading, saveChecklist };
+}
+
+export function useChecklistHistory(storeId) {
+  const localKeyPrefix = `checklist_${storeId}_`;
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const refreshLocal = useCallback(() => {
+    const all = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(localKeyPrefix)) {
+        const list = getLocalData(k);
+        list.forEach((r) => all.push(r));
+      }
+    }
+    all.sort((a, b) => (b.dateKey || '').localeCompare(a.dateKey || ''));
+    setHistory(all);
+    setLoading(false);
+  }, [localKeyPrefix]);
+
+  useEffect(() => {
+    if (!storeId) return;
+
+    if (!isFirebaseConfigured) {
+      refreshLocal();
+      return;
+    }
+
+    const q = query(
+      collection(db, 'checklists'),
+      where('storeId', '==', storeId)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.dateKey || '').localeCompare(a.dateKey || ''));
+      setHistory(data);
+      setLoading(false);
+    });
+    return unsub;
+  }, [storeId, refreshLocal]);
+
+  const removeRecord = async (id) => {
+    if (isFirebaseConfigured) {
+      return deleteDoc(doc(db, 'checklists', id));
+    }
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(localKeyPrefix)) {
+        const list = getLocalData(k).filter((r) => r.id !== id);
+        setLocalData(k, list);
+      }
+    }
+    refreshLocal();
+  };
+
+  return { history, loading, removeRecord };
+}
+
 export function useNotices(storeId) {
   const localKey = 'notices_global';
   const [notices, setNotices] = useState([]);
