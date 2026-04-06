@@ -40,7 +40,7 @@ export default function Layout() {
           {STORES.map((store) => (
             <NavLink
               key={store.id}
-              to={`/store/${store.id}/handoff`}
+              to={`/store/${store.id}/checklist`}
               className={({ isActive }) =>
                 `nav-item store-link${isActive || storeId === store.id ? ' active' : ''}`
               }
@@ -54,14 +54,14 @@ export default function Layout() {
       <main className="main-content">
         {currentStore && (
           <div className="store-tabs">
+            <NavLink to={`/store/${storeId}/checklist`} className="tab">
+              체크리스트
+            </NavLink>
             <NavLink to={`/store/${storeId}/handoff`} className="tab" end>
               인수인계
             </NavLink>
             <NavLink to={`/store/${storeId}/notices`} className="tab">
               공지
-            </NavLink>
-            <NavLink to={`/store/${storeId}/checklist`} className="tab">
-              체크리스트
             </NavLink>
           </div>
         )}
