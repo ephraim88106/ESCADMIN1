@@ -80,7 +80,7 @@ export default function Dashboard() {
         {storeSummary.map((store) => (
           <Link
             key={store.id}
-            to={`/store/${store.id}/handoff`}
+            to={`/store/${store.id}/tasks`}
             className={`store-card${store.uncheckedNotices > 0 || store.handoffPending ? ' store-card-alert' : ''}`}
           >
             <div className="store-card-name">{store.name}</div>
