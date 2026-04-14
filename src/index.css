@@ -371,13 +371,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: var(--bg);
-  border-radius: 8px;
   transition: all 0.15s;
-}
-
-.task-item.checked {
-  opacity: 0.55;
 }
 
 .task-checkbox {
@@ -414,20 +408,71 @@ body {
   border-color: var(--primary);
 }
 
+.task-item-wrapper {
+  background: var(--bg);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.task-item-wrapper.checked {
+  opacity: 0.55;
+}
+
+.task-memos {
+  padding: 4px 12px 8px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-memo-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .task-memo {
-  width: 100px;
-  padding: 4px 8px;
+  flex: 1;
+  padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 12px;
   background: var(--card-bg);
   color: var(--text);
-  flex-shrink: 0;
 }
 
 .task-memo:focus {
   outline: none;
   border-color: var(--primary);
+}
+
+.task-memo-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.task-memo-delete:hover {
+  color: var(--danger, #e74c3c);
+}
+
+.task-memo-add {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.task-memo-add:hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .task-delete {

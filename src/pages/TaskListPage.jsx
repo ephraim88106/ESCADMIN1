@@ -35,8 +35,19 @@ function TaskSection({ title, icon, storeId, type }) {
     await updateTask(id, { date });
   };
 
-  const handleMemoChange = async (id, memo) => {
-    await updateTask(id, { memo });
+  const handleAddMemo = async (id, memos) => {
+    await updateTask(id, { memos: [...(memos || []), ''] });
+  };
+
+  const handleMemoChange = async (id, memos, idx, value) => {
+    const next = [...(memos || [])];
+    next[idx] = value;
+    await updateTask(id, { memos: next });
+  };
+
+  const handleRemoveMemo = async (id, memos, idx) => {
+    const next = (memos || []).filter((_, i) => i !== idx);
+    await updateTask(id, { memos: next });
   };
 
   const handleRemove = async (id) => {
@@ -66,40 +77,40 @@ function TaskSection({ title, icon, storeId, type }) {
       ) : (
         <div className="task-list">
           {tasks.map((task) => (
-            <div key={task.id} className={`task-item${task.checked ? ' checked' : ''}`}>
-              <input
-                type="checkbox"
-                className="task-checkbox"
-                checked={!!task.checked}
-                onChange={() => handleToggle(task.id, task.checked)}
-              />
-              <span className={`task-text${task.checked ? ' done' : ''}`}>{task.text}</span>
-              {isRegular && (
+            <div key={task.id} className={`task-item-wrapper${task.checked ? ' checked' : ''}`}>
+              <div className="task-item">
+                <input
+                  type="checkbox"
+                  className="task-checkbox"
+                  checked={!!task.checked}
+                  onChange={() => handleToggle(task.id, task.checked)}
+                />
+                <span className={`task-text${task.checked ? ' done' : ''}`}>{task.text}</span>
                 <input
                   type="date"
                   className="task-date"
                   value={task.date || ''}
                   onChange={(e) => handleDateChange(task.id, e.target.value)}
                 />
-              )}
+                <button className="task-delete" onClick={() => handleRemove(task.id)}>✕</button>
+              </div>
               {!isRegular && (
-                <>
-                  <input
-                    type="date"
-                    className="task-date"
-                    value={task.date || ''}
-                    onChange={(e) => handleDateChange(task.id, e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    className="task-memo"
-                    placeholder="메모"
-                    value={task.memo || ''}
-                    onChange={(e) => handleMemoChange(task.id, e.target.value)}
-                  />
-                </>
+                <div className="task-memos">
+                  {(task.memos || []).map((memo, mi) => (
+                    <div key={mi} className="task-memo-row">
+                      <input
+                        type="text"
+                        className="task-memo"
+                        placeholder="메모"
+                        value={memo}
+                        onChange={(e) => handleMemoChange(task.id, task.memos, mi, e.target.value)}
+                      />
+                      <button className="task-memo-delete" onClick={() => handleRemoveMemo(task.id, task.memos, mi)}>✕</button>
+                    </div>
+                  ))}
+                  <button className="task-memo-add" onClick={() => handleAddMemo(task.id, task.memos)}>+ 메모 추가</button>
+                </div>
               )}
-              <button className="task-delete" onClick={() => handleRemove(task.id)}>✕</button>
             </div>
           ))}
         </div>
