@@ -83,13 +83,21 @@ function TaskSection({ title, icon, storeId, type }) {
                 />
               )}
               {!isRegular && (
-                <input
-                  type="text"
-                  className="task-memo"
-                  placeholder="메모"
-                  value={task.memo || ''}
-                  onChange={(e) => handleMemoChange(task.id, e.target.value)}
-                />
+                <>
+                  <input
+                    type="date"
+                    className="task-date"
+                    value={task.date || ''}
+                    onChange={(e) => handleDateChange(task.id, e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="task-memo"
+                    placeholder="메모"
+                    value={task.memo || ''}
+                    onChange={(e) => handleMemoChange(task.id, e.target.value)}
+                  />
+                </>
               )}
               <button className="task-delete" onClick={() => handleRemove(task.id)}>✕</button>
             </div>
