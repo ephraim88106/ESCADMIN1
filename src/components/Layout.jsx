@@ -57,11 +57,16 @@ export default function Layout() {
             <NavLink to={`/store/${storeId}/checklist`} className="tab">
               체크리스트
             </NavLink>
-            <NavLink to={`/store/${storeId}/handoff`} className="tab" end>
-              인수인계
+            <NavLink to={`/store/${storeId}/inventory`} className="tab">
+              재고조사
             </NavLink>
-            <NavLink to={`/store/${storeId}/notices`} className="tab">
-              공지
+            <NavLink
+              to={`/store/${storeId}/board/orders`}
+              className={({ isActive }) =>
+                `tab${isActive || location.pathname.startsWith(`/store/${storeId}/board`) ? ' active' : ''}`
+              }
+            >
+              게시판
             </NavLink>
           </div>
         )}

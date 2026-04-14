@@ -171,6 +171,36 @@ body {
   border-bottom-color: var(--primary);
 }
 
+/* === Sub Tabs (게시판 하위메뉴) === */
+.sub-tabs {
+  display: flex;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0;
+}
+
+.sub-tab {
+  flex: 1;
+  padding: 10px 8px;
+  text-decoration: none;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 12px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sub-tab:hover {
+  color: var(--text);
+}
+
+.sub-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
 .page-content {
   padding: 16px;
 }
