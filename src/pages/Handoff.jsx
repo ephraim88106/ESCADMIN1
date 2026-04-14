@@ -421,8 +421,8 @@ export default function Handoff() {
       {handoff.sections.map((sec, i) => {
         const urgent = /#긴급|#급/.test(sec.content);
         const icon = LABEL_ICONS[sec.label] || '📋';
-        const isOrder = sec.label === '주문/발주';
-        const orderLines = isOrder ? sec.content.split('\n').filter((l) => l.trim()) : [];
+        const isItemSection = sec.label === '주문/발주' || sec.label === '도착';
+        const orderLines = isItemSection ? sec.content.split('\n').filter((l) => l.trim()) : [];
         const orderChecks = sec.orderChecks || orderLines.map(() => false);
 
         return (
@@ -431,7 +431,7 @@ export default function Handoff() {
             className={`handoff-section${urgent ? ' urgent' : ''}${sec.checked ? ' checked' : ''}`}
           >
             <div className="section-header">
-              {editable && !isOrder ? (
+              {editable && !isItemSection ? (
                 <label className="check-label">
                   <input
                     type="checkbox"
@@ -443,15 +443,15 @@ export default function Handoff() {
                 </label>
               ) : (
                 <span className="section-label">
-                  {!isOrder && sec.checked ? '✓ ' : ''}{icon} {sec.label}
+                  {!isItemSection && sec.checked ? '✓ ' : ''}{icon} {sec.label}
                   {urgent && <span className="urgent-tag">#긴급</span>}
-                  {isOrder && editable && (
+                  {isItemSection && editable && (
                     <span className="order-check-hint"> — 체크 시 재고에 추가됩니다</span>
                   )}
                 </span>
               )}
             </div>
-            {isOrder ? (
+            {isItemSection ? (
               <div className="order-lines">
                 {orderLines.map((line, li) => {
                   const checked = !!orderChecks[li];
