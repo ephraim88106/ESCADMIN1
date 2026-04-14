@@ -369,7 +369,7 @@ export default function Handoff() {
     );
     await updateHandoff(handoff.id, { sections: newSections });
 
-    // 체크 시 재고에 추가
+    // 체크 시 재고 + 주문내역에 추가
     if (!wasChecked) {
       const lineName = lines[lineIdx].trim();
       // 품명 추출 (숫자/수량 제거)
@@ -386,6 +386,15 @@ export default function Handoff() {
         await updateInventoryItem(existing.id, { stock: (existing.stock ?? 0) + 1 });
       } else {
         await addInventoryItem({ name: itemName, stock: 1, opened: 0 });
+      }
+
+      // 주문내역에도 추가
+      if (sec.label === '주문/발주') {
+        await addOrder({
+          item: lineName,
+          author: handoff.author || '인수인계',
+          status: 'pending',
+        });
       }
     }
   };
