@@ -8,6 +8,7 @@ import Notices from './pages/Notices';
 import Checklist from './pages/Checklist';
 import Inventory from './pages/Inventory';
 import Orders from './pages/Orders';
+import TaskListPage from './pages/TaskListPage';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/store/:storeId/schedule" element={<Schedule />} />
+          <Route path="/store/:storeId/tasks" element={<TaskListPage />} />
           <Route path="/store/:storeId/checklist" element={<Checklist />} />
           <Route path="/store/:storeId/inventory" element={<Inventory />} />
           <Route path="/store/:storeId/board" element={<Board />}>

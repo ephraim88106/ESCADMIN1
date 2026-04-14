@@ -411,6 +411,75 @@ export function useInventory(storeId) {
   return { items, loading, addItem, updateItem, removeItem };
 }
 
+export function useTaskList(storeId, type) {
+  const localKey = `tasklist_${storeId}_${type}`;
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const refreshLocal = useCallback(() => {
+    const data = getLocalData(localKey);
+    data.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    setTasks(data);
+    setLoading(false);
+  }, [localKey]);
+
+  useEffect(() => {
+    if (!storeId) return;
+
+    if (!isFirebaseConfigured) {
+      refreshLocal();
+      return;
+    }
+
+    const q = query(
+      collection(db, 'tasklists'),
+      where('storeId', '==', storeId),
+      where('type', '==', type)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      setTasks(data);
+      setLoading(false);
+    });
+    return unsub;
+  }, [storeId, type, refreshLocal]);
+
+  const addTask = async (data) => {
+    const entry = { ...data, storeId, type, checked: false, order: Date.now() };
+    if (isFirebaseConfigured) {
+      return addDoc(collection(db, 'tasklists'), entry);
+    }
+    const list = getLocalData(localKey);
+    list.push({ id: generateId(), ...entry });
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  const updateTask = async (id, data) => {
+    if (isFirebaseConfigured) {
+      return updateDoc(doc(db, 'tasklists', id), data);
+    }
+    const list = getLocalData(localKey).map((t) =>
+      t.id === id ? { ...t, ...data } : t
+    );
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  const removeTask = async (id) => {
+    if (isFirebaseConfigured) {
+      return deleteDoc(doc(db, 'tasklists', id));
+    }
+    const list = getLocalData(localKey).filter((t) => t.id !== id);
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  return { tasks, loading, addTask, updateTask, removeTask };
+}
+
 export function useOrders(storeId) {
   const localKey = `orders_${storeId}`;
   const [orders, setOrders] = useState([]);

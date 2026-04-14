@@ -40,7 +40,7 @@ export default function Layout() {
           {STORES.map((store) => (
             <NavLink
               key={store.id}
-              to={`/store/${store.id}/checklist`}
+              to={`/store/${store.id}/tasks`}
               className={({ isActive }) =>
                 `nav-item store-link${isActive || storeId === store.id ? ' active' : ''}`
               }
@@ -54,6 +54,9 @@ export default function Layout() {
       <main className="main-content">
         {currentStore && (
           <div className="store-tabs">
+            <NavLink to={`/store/${storeId}/tasks`} className="tab">
+              리스트
+            </NavLink>
             <NavLink to={`/store/${storeId}/checklist`} className="tab">
               체크리스트
             </NavLink>
