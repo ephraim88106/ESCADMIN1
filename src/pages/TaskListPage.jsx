@@ -18,7 +18,7 @@ function SeatSection({ storeId }) {
   const handleAdd = async () => {
     const text = newSeat.trim();
     if (!text) return;
-    await addSeat({ text, memo: '' });
+    await addSeat({ text, memo: '', date: todayStr() });
     setNewSeat('');
   };
 
