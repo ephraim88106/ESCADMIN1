@@ -34,6 +34,15 @@ export default function Inventory() {
 
   const handleNumberChange = async (id, field, value) => {
     const num = Math.max(0, parseInt(value) || 0);
+    if (field === 'stock') {
+      const item = items.find((i) => i.id === id);
+      const prev = item?.stock ?? 0;
+      if (num < prev) {
+        const diff = prev - num;
+        await updateItem(id, { stock: num, opened: (item?.opened ?? 0) + diff });
+        return;
+      }
+    }
     await updateItem(id, { [field]: num });
   };
 
