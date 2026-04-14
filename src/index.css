@@ -414,6 +414,22 @@ body {
   border-color: var(--primary);
 }
 
+.task-memo {
+  width: 100px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--card-bg);
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.task-memo:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
 .task-delete {
   background: none;
   border: none;

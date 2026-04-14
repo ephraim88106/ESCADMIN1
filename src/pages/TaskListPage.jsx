@@ -35,6 +35,10 @@ function TaskSection({ title, icon, storeId, type }) {
     await updateTask(id, { date });
   };
 
+  const handleMemoChange = async (id, memo) => {
+    await updateTask(id, { memo });
+  };
+
   const handleRemove = async (id) => {
     await removeTask(id);
   };
@@ -76,6 +80,15 @@ function TaskSection({ title, icon, storeId, type }) {
                   className="task-date"
                   value={task.date || ''}
                   onChange={(e) => handleDateChange(task.id, e.target.value)}
+                />
+              )}
+              {!isRegular && (
+                <input
+                  type="text"
+                  className="task-memo"
+                  placeholder="메모"
+                  value={task.memo || ''}
+                  onChange={(e) => handleMemoChange(task.id, e.target.value)}
                 />
               )}
               <button className="task-delete" onClick={() => handleRemove(task.id)}>✕</button>
