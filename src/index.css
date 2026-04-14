@@ -743,6 +743,25 @@ body {
   padding: 10px;
 }
 
+.detected-store-badge {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--card-bg));
+  border: 1px solid var(--primary);
+  color: var(--text);
+}
+
+.detected-store-badge.other {
+  background: color-mix(in srgb, var(--warning, #f39c12) 12%, var(--card-bg));
+  border-color: var(--warning, #f39c12);
+}
+
+.detected-store-badge span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .handoff-card {
   background: var(--card-bg);
   border: 1px solid var(--border);

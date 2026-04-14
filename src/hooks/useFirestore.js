@@ -192,15 +192,17 @@ export function useHandoffs(storeId) {
     return unsub;
   }, [storeId, refreshLocal]);
 
-  const addHandoff = async (data) => {
-    const entry = { ...data, storeId, createdAt: Date.now() };
+  const addHandoff = async (data, targetStoreId) => {
+    const sid = targetStoreId || storeId;
+    const entry = { ...data, storeId: sid, createdAt: Date.now() };
     if (isFirebaseConfigured) {
       return addDoc(collection(db, 'handoffs'), entry);
     }
-    const list = getLocalData(localKey);
+    const key = targetStoreId ? `handoffs_${targetStoreId}` : localKey;
+    const list = getLocalData(key);
     list.push({ id: generateId(), ...entry });
-    setLocalData(localKey, list);
-    refreshLocal();
+    setLocalData(key, list);
+    if (!targetStoreId || targetStoreId === storeId) refreshLocal();
   };
 
   const updateHandoff = async (id, data) => {

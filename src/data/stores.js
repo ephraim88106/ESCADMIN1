@@ -21,3 +21,13 @@ export const STORES = [
 export function getStoreById(id) {
   return STORES.find((store) => store.id === id);
 }
+
+export function detectStoreFromText(text) {
+  for (const store of STORES) {
+    const name = store.name.replace('점', '');
+    if (text.includes(store.name) || text.includes(name + '점')) {
+      return store;
+    }
+  }
+  return null;
+}

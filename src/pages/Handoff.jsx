@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { getStoreById } from '../data/stores';
+import { useParams, useNavigate } from 'react-router-dom';
+import { getStoreById, detectStoreFromText } from '../data/stores';
 import { useHandoffs, useNotices, useInventory } from '../hooks/useFirestore';
 
 // ===== 자동 파서 =====
@@ -226,6 +226,7 @@ const LABEL_ICONS = {
 
 export default function Handoff() {
   const { storeId } = useParams();
+  const navigate = useNavigate();
   const store = getStoreById(storeId);
   const { handoffs, loading, addHandoff, updateHandoff, removeHandoff } =
     useHandoffs(storeId);
@@ -238,6 +239,7 @@ export default function Handoff() {
   const [preview, setPreview] = useState(null);
   const [images, setImages] = useState([]);
   const [expandedIds, setExpandedIds] = useState(new Set());
+  const [detectedStore, setDetectedStore] = useState(null);
 
   if (!store) return <p>지점을 찾을 수 없습니다.</p>;
 
@@ -257,15 +259,26 @@ export default function Handoff() {
     });
   };
 
+  const handleTextChange = (text) => {
+    setRawText(text);
+    setPreview(null);
+    const found = detectStoreFromText(text);
+    setDetectedStore(found);
+  };
+
   const handleParse = () => {
     if (!rawText.trim()) return;
     setPreview(parseMessage(rawText));
   };
 
+  const targetStore = detectedStore || store;
+  const isOtherStore = detectedStore && detectedStore.id !== storeId;
+
   const handleSubmit = async () => {
     if (!rawText.trim()) return;
     const sections = preview || parseMessage(rawText);
     if (sections.length === 0) return;
+    const targetId = isOtherStore ? detectedStore.id : undefined;
     await addHandoff({
       author: author.trim() || '미입력',
       rawText,
@@ -273,12 +286,16 @@ export default function Handoff() {
       images,
       checkedBy: null,
       checkedAt: null,
-    });
+    }, targetId);
     setAuthor('');
     setRawText('');
     setPreview(null);
     setImages([]);
+    setDetectedStore(null);
     setShowForm(false);
+    if (isOtherStore) {
+      navigate(`/store/${detectedStore.id}/board/handoff`);
+    }
   };
 
   const handleImageUpload = (e) => {
@@ -520,11 +537,17 @@ export default function Handoff() {
             메시지 붙여넣기
             <textarea
               value={rawText}
-              onChange={(e) => { setRawText(e.target.value); setPreview(null); }}
+              onChange={(e) => handleTextChange(e.target.value)}
               placeholder="카톡/문자 내용을 그대로 붙여넣으세요"
               rows={10}
             />
           </label>
+          {detectedStore && (
+            <div className={`detected-store-badge${isOtherStore ? ' other' : ''}`}>
+              📍 감지된 지점: <strong>{detectedStore.name}</strong>
+              {isOtherStore && <span> (현재: {store.name} → {detectedStore.name}에 등록됩니다)</span>}
+            </div>
+          )}
           <label>
             사진 첨부
             <input
