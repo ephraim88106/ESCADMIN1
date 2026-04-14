@@ -341,6 +341,74 @@ export function useChecklistHistory(storeId) {
   return { history, loading, removeRecord };
 }
 
+export function useInventory(storeId) {
+  const localKey = `inventory_${storeId}`;
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const refreshLocal = useCallback(() => {
+    const data = getLocalData(localKey);
+    data.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    setItems(data);
+    setLoading(false);
+  }, [localKey]);
+
+  useEffect(() => {
+    if (!storeId) return;
+
+    if (!isFirebaseConfigured) {
+      refreshLocal();
+      return;
+    }
+
+    const q = query(
+      collection(db, 'inventory'),
+      where('storeId', '==', storeId)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      setItems(data);
+      setLoading(false);
+    });
+    return unsub;
+  }, [storeId, refreshLocal]);
+
+  const addItem = async (data) => {
+    const entry = { ...data, storeId, stock: 0, opened: 0, order: Date.now() };
+    if (isFirebaseConfigured) {
+      return addDoc(collection(db, 'inventory'), entry);
+    }
+    const list = getLocalData(localKey);
+    list.push({ id: generateId(), ...entry });
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  const updateItem = async (id, data) => {
+    if (isFirebaseConfigured) {
+      return updateDoc(doc(db, 'inventory', id), data);
+    }
+    const list = getLocalData(localKey).map((item) =>
+      item.id === id ? { ...item, ...data } : item
+    );
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  const removeItem = async (id) => {
+    if (isFirebaseConfigured) {
+      return deleteDoc(doc(db, 'inventory', id));
+    }
+    const list = getLocalData(localKey).filter((item) => item.id !== id);
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  return { items, loading, addItem, updateItem, removeItem };
+}
+
 export function useNotices(storeId) {
   const localKey = 'notices_global';
   const [notices, setNotices] = useState([]);
