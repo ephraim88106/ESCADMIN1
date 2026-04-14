@@ -30,6 +30,10 @@ function SeatSection({ storeId }) {
     await updateSeat(id, { memo });
   };
 
+  const handleDateChange = async (id, date) => {
+    await updateSeat(id, { date });
+  };
+
   return (
     <div className="task-section">
       <div className="task-section-title">💺 지정석 목록</div>
@@ -58,9 +62,15 @@ function SeatSection({ storeId }) {
               <input
                 type="text"
                 className="task-memo"
-                placeholder="메모 (이름, 기간 등)"
+                placeholder="메모"
                 value={seat.memo || ''}
                 onChange={(e) => handleMemoChange(seat.id, e.target.value)}
+              />
+              <input
+                type="date"
+                className="task-date"
+                value={seat.date || ''}
+                onChange={(e) => handleDateChange(seat.id, e.target.value)}
               />
               <button className="task-delete" onClick={() => removeSeat(seat.id)}>✕</button>
             </div>
