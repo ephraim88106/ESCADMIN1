@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getStoreById } from '../data/stores';
-import { useHandoffs, useNotices } from '../hooks/useFirestore';
+import { useHandoffs, useNotices, useInventory } from '../hooks/useFirestore';
 
 // ===== 자동 파서 =====
 function parseMessage(text) {
@@ -230,6 +230,7 @@ export default function Handoff() {
   const { handoffs, loading, addHandoff, updateHandoff, removeHandoff } =
     useHandoffs(storeId);
   const { notices, updateNotice } = useNotices(storeId);
+  const { items: inventoryItems, addItem: addInventoryItem, updateItem: updateInventoryItem } = useInventory(storeId);
 
   const [showForm, setShowForm] = useState(false);
   const [author, setAuthor] = useState('');
@@ -323,6 +324,40 @@ export default function Handoff() {
     await updateHandoff(handoff.id, { sections: newSections });
   };
 
+  const handleOrderLineCheck = async (handoff, sectionIdx, lineIdx) => {
+    const sec = handoff.sections[sectionIdx];
+    const lines = sec.content.split('\n').filter((l) => l.trim());
+    const orderChecks = sec.orderChecks ? [...sec.orderChecks] : lines.map(() => false);
+    const wasChecked = orderChecks[lineIdx];
+    orderChecks[lineIdx] = !wasChecked;
+
+    const allChecked = orderChecks.every(Boolean);
+    const newSections = handoff.sections.map((s, i) =>
+      i === sectionIdx ? { ...s, orderChecks, checked: allChecked } : s
+    );
+    await updateHandoff(handoff.id, { sections: newSections });
+
+    // 체크 시 재고에 추가
+    if (!wasChecked) {
+      const lineName = lines[lineIdx].trim();
+      // 품명 추출 (숫자/수량 제거)
+      const itemName = lineName
+        .replace(/\d+\s*(박스|팩|개|봉|묶음|세트|병|캔|롤|ea|EA|장)/g, '')
+        .replace(/[xX×]\s*\d+/g, '')
+        .replace(/\s+/g, ' ')
+        .trim() || lineName;
+
+      const existing = inventoryItems.find(
+        (item) => item.name === itemName || item.name === lineName
+      );
+      if (existing) {
+        await updateInventoryItem(existing.id, { stock: (existing.stock ?? 0) + 1 });
+      } else {
+        await addInventoryItem({ name: itemName, stock: 1, opened: 0 });
+      }
+    }
+  };
+
   const handleConfirmAll = async (handoff) => {
     const checkerName = window.prompt('확인자 이름을 입력하세요:');
     if (!checkerName?.trim()) return;
@@ -369,13 +404,17 @@ export default function Handoff() {
       {handoff.sections.map((sec, i) => {
         const urgent = /#긴급|#급/.test(sec.content);
         const icon = LABEL_ICONS[sec.label] || '📋';
+        const isOrder = sec.label === '주문/발주';
+        const orderLines = isOrder ? sec.content.split('\n').filter((l) => l.trim()) : [];
+        const orderChecks = sec.orderChecks || orderLines.map(() => false);
+
         return (
           <div
             key={i}
             className={`handoff-section${urgent ? ' urgent' : ''}${sec.checked ? ' checked' : ''}`}
           >
             <div className="section-header">
-              {editable ? (
+              {editable && !isOrder ? (
                 <label className="check-label">
                   <input
                     type="checkbox"
@@ -387,12 +426,41 @@ export default function Handoff() {
                 </label>
               ) : (
                 <span className="section-label">
-                  {sec.checked ? '✓ ' : ''}{icon} {sec.label}
+                  {!isOrder && sec.checked ? '✓ ' : ''}{icon} {sec.label}
                   {urgent && <span className="urgent-tag">#긴급</span>}
+                  {isOrder && editable && (
+                    <span className="order-check-hint"> — 체크 시 재고에 추가됩니다</span>
+                  )}
                 </span>
               )}
             </div>
-            <pre className="section-content">{sec.content}</pre>
+            {isOrder ? (
+              <div className="order-lines">
+                {orderLines.map((line, li) => {
+                  const checked = !!orderChecks[li];
+                  return (
+                    <label
+                      key={li}
+                      className={`order-line${checked ? ' checked' : ''}`}
+                    >
+                      {editable ? (
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => handleOrderLineCheck(handoff, i, li)}
+                        />
+                      ) : (
+                        <span className="order-line-icon">{checked ? '✓' : '○'}</span>
+                      )}
+                      <span className={checked ? 'line-through' : ''}>{line.trim()}</span>
+                      {checked && <span className="order-added-tag">재고 추가됨</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <pre className="section-content">{sec.content}</pre>
+            )}
           </div>
         );
       })}
