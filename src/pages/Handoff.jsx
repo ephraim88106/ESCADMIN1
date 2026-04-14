@@ -388,14 +388,6 @@ export default function Handoff() {
         await addInventoryItem({ name: itemName, stock: 1, opened: 0 });
       }
 
-      // 주문내역에도 추가
-      if (sec.label === '주문/발주') {
-        await addOrder({
-          item: lineName,
-          author: handoff.author || '인수인계',
-          status: 'pending',
-        });
-      }
     }
   };
 
