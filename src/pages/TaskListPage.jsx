@@ -11,6 +11,66 @@ function todayStr() {
   return `${y}-${m}-${day}`;
 }
 
+function SeatSection({ storeId }) {
+  const { tasks: seats, loading, addTask: addSeat, updateTask: updateSeat, removeTask: removeSeat } = useTaskList(storeId, 'seats');
+  const [newSeat, setNewSeat] = useState('');
+
+  const handleAdd = async () => {
+    const text = newSeat.trim();
+    if (!text) return;
+    await addSeat({ text, memo: '' });
+    setNewSeat('');
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleAdd();
+  };
+
+  const handleMemoChange = async (id, memo) => {
+    await updateSeat(id, { memo });
+  };
+
+  return (
+    <div className="task-section">
+      <div className="task-section-title">💺 지정석 목록</div>
+
+      <div className="task-add-row">
+        <input
+          type="text"
+          className="task-add-input"
+          placeholder="좌석번호 (예: 12번, A3...)"
+          value={newSeat}
+          onChange={(e) => setNewSeat(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        <button className="btn-primary" onClick={handleAdd}>추가</button>
+      </div>
+
+      {loading ? (
+        <p className="loading">불러오는 중...</p>
+      ) : seats.length === 0 ? (
+        <p className="empty-hint">지정석이 없습니다.</p>
+      ) : (
+        <div className="task-list">
+          {seats.map((seat) => (
+            <div key={seat.id} className="task-item">
+              <span className="seat-number">{seat.text}</span>
+              <input
+                type="text"
+                className="task-memo"
+                placeholder="메모 (이름, 기간 등)"
+                value={seat.memo || ''}
+                onChange={(e) => handleMemoChange(seat.id, e.target.value)}
+              />
+              <button className="task-delete" onClick={() => removeSeat(seat.id)}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TaskSection({ title, icon, storeId, type }) {
   const { tasks, loading, addTask, updateTask, removeTask } = useTaskList(storeId, type);
   const [newText, setNewText] = useState('');
@@ -127,6 +187,7 @@ export default function TaskListPage() {
 
   return (
     <div className="tasklist-page">
+      <SeatSection storeId={storeId} />
       <TaskSection title="정기리스트" icon="📅" storeId={storeId} type="regular" />
       <TaskSection title="비정기리스트" icon="📋" storeId={storeId} type="irregular" />
     </div>

@@ -489,6 +489,14 @@ body {
   color: var(--danger, #e74c3c);
 }
 
+.seat-number {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  min-width: 50px;
+  flex-shrink: 0;
+}
+
 /* === Orders (주문내역) === */
 .orders-add-row {
   display: flex;
