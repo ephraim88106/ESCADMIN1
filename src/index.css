@@ -317,6 +317,100 @@ body {
   color: #fff;
 }
 
+/* === Orders (주문내역) === */
+.orders-add-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.orders-add-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--card-bg);
+  color: var(--text);
+}
+
+.orders-section {
+  margin-bottom: 20px;
+}
+
+.orders-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.orders-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--card-bg));
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.order-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.order-item.pending {
+  border-left: 3px solid var(--primary);
+}
+
+.order-item.completed {
+  opacity: 0.6;
+}
+
+.order-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.order-item-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.order-item-name.line-through {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.order-item-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.order-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 /* === Dashboard === */
 .dashboard h2 {
   font-size: 22px;

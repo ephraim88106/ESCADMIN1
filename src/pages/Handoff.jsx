@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getStoreById, detectStoreFromText } from '../data/stores';
-import { useHandoffs, useNotices, useInventory } from '../hooks/useFirestore';
+import { useHandoffs, useNotices, useInventory, useOrders } from '../hooks/useFirestore';
 
 // ===== 자동 파서 =====
 function parseMessage(text) {
@@ -232,6 +232,7 @@ export default function Handoff() {
     useHandoffs(storeId);
   const { notices, updateNotice } = useNotices(storeId);
   const { items: inventoryItems, addItem: addInventoryItem, updateItem: updateInventoryItem } = useInventory(storeId);
+  const { addOrder } = useOrders(storeId);
 
   const [showForm, setShowForm] = useState(false);
   const [author, setAuthor] = useState('');
@@ -287,6 +288,20 @@ export default function Handoff() {
       checkedBy: null,
       checkedAt: null,
     }, targetId);
+
+    // 주문/발주 섹션이 있으면 주문내역에 자동 등록
+    const orderSections = sections.filter((s) => s.label === '주문/발주');
+    for (const sec of orderSections) {
+      const lines = sec.content.split('\n').filter((l) => l.trim());
+      for (const line of lines) {
+        await addOrder({
+          item: line.trim(),
+          author: author.trim() || '미입력',
+          status: 'pending',
+        }, targetId);
+      }
+    }
+
     setAuthor('');
     setRawText('');
     setPreview(null);
