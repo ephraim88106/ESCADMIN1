@@ -205,6 +205,40 @@ function isSectionHeader(line) {
   return /^[ㄴ]?\s*빈\s?(자리|좌석)|^도착$|^주문$|^이전\s*주문$|^스터디|^카페/i.test(line);
 }
 
+// 중복 텍스트 감지: 일치하는 기존 인수인계 반환 (없으면 null)
+function findDuplicate(newText, existingHandoffs) {
+  if (!newText.trim() || existingHandoffs.length === 0) return null;
+  const normalize = (t) => t.trim().replace(/\s+/g, ' ').toLowerCase();
+  const newNorm = normalize(newText);
+  if (newNorm.length < 10) return null;
+
+  for (const h of existingHandoffs) {
+    if (!h.rawText) continue;
+    const existNorm = normalize(h.rawText);
+
+    // 완전 일치
+    if (newNorm === existNorm) return h;
+
+    // 한쪽이 다른 쪽을 포함
+    const shorter = newNorm.length <= existNorm.length ? newNorm : existNorm;
+    const longer = newNorm.length <= existNorm.length ? existNorm : newNorm;
+    if (shorter.length > 15 && longer.includes(shorter)) return h;
+
+    // 단어 겹침 비율 (85% 이상이면 중복)
+    const newWords = newNorm.split(/\s+/).filter((w) => w.length > 1);
+    const existWords = new Set(existNorm.split(/\s+/).filter((w) => w.length > 1));
+    if (newWords.length < 5) continue;
+    const overlap = newWords.filter((w) => existWords.has(w)).length;
+    if (overlap / newWords.length >= 0.85) return h;
+  }
+  return null;
+}
+
+function formatDate(ts) {
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 function formatTime(ts) {
   const d = new Date(ts);
   const month = d.getMonth() + 1;
@@ -241,6 +275,7 @@ export default function Handoff() {
   const [images, setImages] = useState([]);
   const [expandedIds, setExpandedIds] = useState(new Set());
   const [detectedStore, setDetectedStore] = useState(null);
+  const [duplicateOf, setDuplicateOf] = useState(null);
 
   if (!store) return <p>지점을 찾을 수 없습니다.</p>;
 
@@ -265,6 +300,7 @@ export default function Handoff() {
     setPreview(null);
     const found = detectStoreFromText(text);
     setDetectedStore(found);
+    setDuplicateOf(findDuplicate(text, handoffs));
   };
 
   const handleParse = () => {
@@ -287,6 +323,7 @@ export default function Handoff() {
       images,
       checkedBy: null,
       checkedAt: null,
+      duplicateOfDate: findDuplicate(rawText, handoffs)?.createdAt ?? null,
     }, targetId);
 
     // 주문/발주 섹션이 있으면 주문내역에 자동 등록
@@ -307,6 +344,7 @@ export default function Handoff() {
     setPreview(null);
     setImages([]);
     setDetectedStore(null);
+    setDuplicateOf(null);
     setShowForm(false);
     if (isOtherStore) {
       navigate(`/store/${detectedStore.id}/board/handoff`);
@@ -620,12 +658,17 @@ export default function Handoff() {
       ) : (
         <>
           {pending.map((h) => (
-            <div key={h.id} className="handoff-card pending-card">
+            <div key={h.id} className={`handoff-card pending-card${h.duplicateOfDate ? ' duplicate-card' : ''}`}>
               <div className="handoff-card-header">
                 <div>
                   <span className="handoff-status pending">확인 대기</span>
                   <strong>{h.author}</strong>
-                  <span className="handoff-time">{formatTime(h.createdAt)}</span>
+                  <span className="handoff-time">
+                    {formatTime(h.createdAt)}
+                    {h.duplicateOfDate && (
+                      <span className="duplicate-inline">({formatDate(h.duplicateOfDate)}, 중복)</span>
+                    )}
+                  </span>
                 </div>
                 <div className="handoff-card-actions">
                   <button className="btn-primary btn-confirm" onClick={() => handleConfirmAll(h)}>
@@ -668,12 +711,17 @@ export default function Handoff() {
                 </button>
               </div>
               {history.map((h) => (
-                <div key={h.id} className="handoff-card history-card">
+                <div key={h.id} className={`handoff-card history-card${h.duplicateOfDate ? ' duplicate-card' : ''}`}>
                   <div className="handoff-card-header clickable" onClick={() => toggleExpanded(h.id)}>
                     <div>
                       <span className="handoff-status done">확인 완료</span>
                       <strong>{h.author}</strong>
-                      <span className="handoff-time">{formatTime(h.createdAt)}</span>
+                      <span className="handoff-time">
+                        {formatTime(h.createdAt)}
+                        {h.duplicateOfDate && (
+                          <span className="duplicate-inline">({formatDate(h.duplicateOfDate)}, 중복)</span>
+                        )}
+                      </span>
                       <span className="handoff-checker">→ {h.checkedBy}</span>
                     </div>
                     <div className="history-actions" onClick={(e) => e.stopPropagation()}>
