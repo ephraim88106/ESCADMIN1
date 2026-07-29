@@ -2834,3 +2834,19 @@ body {
   padding: 1px 6px;
   margin-left: 5px;
 }
+
+/* 미도착은 조치가 필요한 상태 — 파랑(처리됨 느낌) 대신 빨강 */
+.wait-tag {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.reorder-wait {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.reorder-store.pending {
+  background: #fff5f5;
+  border-color: #fecaca;
+}

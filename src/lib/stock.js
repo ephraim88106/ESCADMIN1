@@ -55,14 +55,18 @@ export function buildStoreStock(handoffs, aliasMap, today) {
   const latest = last ? last.handoff.parsed.orders || [] : [];
   const toEntry = (o) => {
     const name = canonicalName(o.name, aliasMap);
+    const from = firstSeen.get(name) || null;
+    // 이전 보고에서 못 찾았는데 (이전요청) 이라고 쓰여 있으면 기간을 알 수 없다.
+    // 0일로 두면 '오늘 요청'처럼 보여 담당자가 쓴 '이전'과 어긋난다.
+    const age = from ? daysBetween(from, today) : o.previous ? null : 0;
     return {
       name,
       raw: o.name,
       qty: o.qty,
       unit: o.unit || '',
       urgent: !!o.urgent,
-      firstDate: firstSeen.get(name) || last?.dateKey || null,
-      age: daysBetween(firstSeen.get(name) || last?.dateKey, today),
+      firstDate: from,
+      age,
     };
   };
 
@@ -200,15 +204,24 @@ export function storeReorderToText(storeName, needOrder, pending) {
     lines.push('', '■미도착 발주');
     for (const p of pending) {
       const stock = p.stock != null ? ` (현재고 ${p.stock})` : '';
-      lines.push(`${p.name}${qtyText(p)}${stock} — ${p.age <= 0 ? '오늘 요청' : `${p.age}일째 대기`}`);
+      lines.push(`${p.name}${qtyText(p)}${stock} — ${waitLabel(p.age)}`);
     }
   }
   return lines.join('\n');
 }
 
-/** 발주 목록을 카톡/메모로 옮길 수 있는 텍스트로 */
+/**
+ * 미도착 발주 라벨.
+ *
+ * '발주함' 이라고 쓰면 관리자가 훑을 때 '처리됨'으로 읽힌다.
+ * 실제로는 아직 안 온 것 = 조치가 필요한 것이므로 '미도착'을 앞세운다.
+ *
+ * age 가 null 이면 며칠째인지 모른다는 뜻이다.
+ * (이전요청) 이라고 쓰여 있는데 그 매장의 이전 보고가 없으면 이 경우가 된다.
+ * 이때 '오늘'이라고 표시하면 담당자가 쓴 '이전'을 시스템이 뒤집는 셈이 된다.
+ */
 export function waitLabel(age) {
-  return age <= 0 ? '발주함 (오늘)' : `발주함 ${age}일째`;
+  return age == null || age <= 0 ? '미도착' : `${age}일째 미도착`;
 }
 
 export function reorderToText(reorder) {

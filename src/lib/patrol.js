@@ -112,11 +112,15 @@ export function buildStoreStatus(store, handoffs, today) {
     orderFirstSeen.set(normText(o.text), o.firstDate);
   }
   const latestOrders = parsed?.orders || [];
-  const asOrder = (o) => ({
-    text: o.name,
-    firstDate: orderFirstSeen.get(normText(o.name)) || lastDateKey,
-    age: daysBetween(orderFirstSeen.get(normText(o.name)) || lastDateKey, today),
-  });
+  const asOrder = (o) => {
+    const from = orderFirstSeen.get(normText(o.name)) || null;
+    return {
+      text: o.name,
+      firstDate: from,
+      // 기간을 모르면 null. (이전요청) 인데 이전 보고가 없는 경우.
+      age: from ? daysBetween(from, today) : o.previous ? null : 0,
+    };
+  };
   const newOrders = latestOrders.filter((o) => !o.previous).map(asOrder);
   const openOrders = latestOrders.filter((o) => o.previous).map(asOrder);
 
@@ -127,7 +131,7 @@ export function buildStoreStatus(store, handoffs, today) {
 
   const faults = withAge(openFaults);
   const todos = withAge(openTodos);
-  const orders = openOrders.slice().sort((a, b) => b.age - a.age);
+  const orders = openOrders.slice().sort((a, b) => (b.age ?? 0) - (a.age ?? 0));
 
   const openItems = [...faults, ...todos];
   const maxAge = openItems.length ? openItems[0].age : 0;
@@ -161,7 +165,10 @@ export function buildStoreStatus(store, handoffs, today) {
   if (orderOverdue.length > 0) {
     reasons.push({
       kind: 'order',
-      text: `미도착 발주 ${orderOverdue.length}건 (최장 ${orderOverdue[0].age}일)`,
+      text:
+        orderOverdue[0].age != null
+          ? `미도착 발주 ${orderOverdue.length}건 (최장 ${orderOverdue[0].age}일)`
+          : `미도착 발주 ${orderOverdue.length}건`,
     });
   }
   if (newOrders.length > 0) {
