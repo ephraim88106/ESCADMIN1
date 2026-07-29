@@ -35,6 +35,17 @@ function RepeatTag({ count, changed }) {
   );
 }
 
+/**
+ * 합쳐진 원본 문구들.
+ * 칸은 하나로 접되, 어떤 줄들이 묶였는지는 보여줘야 한다.
+ * 안 그러면 `번호등 13` 이 `번호등 15` 에 묻혀 화면에서 사라진다.
+ */
+function Variants({ list, current }) {
+  const others = (list || []).filter((v) => v !== current);
+  if (others.length === 0) return null;
+  return <span className="item-variants">묶임 · {others.join(' / ')}</span>;
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { byStore, loading, upsertHandoff, findSameDay } = useAllHandoffs();
@@ -314,7 +325,10 @@ function DetailSection({ title, items, empty }) {
         <ul className="order-quick-list">
           {items.map((it, i) => (
             <li key={i} className="order-quick-item">
-              <span>{it.text}</span>
+              <span className="item-main">
+                {it.text}
+                <Variants list={it.variants} current={it.text} />
+              </span>
               <span className="order-quick-tags">
                 <AgeTag age={it.age} />
                 <RepeatTag count={it.count} changed={it.changed} />

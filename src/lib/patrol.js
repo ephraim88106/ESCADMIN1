@@ -81,22 +81,16 @@ function commonPrefix(a, b) {
  *   2) 길이가 같고 한 글자만 다름
  *   3) 앞부분이 3자 이상 같음 (`정수기 물 안나옴` ↔ `정수기 필터 교체 필요`)
  *
- * 안전장치: 양쪽에 숫자가 있고 그 숫자가 다르면 어떤 규칙으로도 합치지 않는다.
- * `번호등 13` 과 `번호등 15` 는 한 글자 차이여도 다른 좌석의 다른 고장이다.
- * (`번호등 13` ↔ `번호등 13번 고장` 은 숫자가 같으므로 합쳐진다)
- *
- * 그래도 잘못 합쳐질 수 있으므로, 합쳐진 항목에는 ✎ 를 붙여 눈으로 확인하게 한다.
+ * 숫자가 달라도 합친다 (2026-07-29 주인님 선택 — 칸을 최대한 접는다).
+ * 대신 합쳐진 원본 문구를 variants 에 전부 남긴다.
+ * `번호등 13` 과 `번호등 15` 가 한 칸이 되더라도 13번이 화면에서 사라지지는 않는다.
+ * 칸을 접는 것과 내용을 버리는 것은 다른 문제다.
  */
 function findSame(key, prevKeys) {
   if (prevKeys.has(key)) return key;
   let best = null;
   let bestScore = 0;
-  const keyDigits = digitsOf(key);
   for (const k of prevKeys) {
-    // 숫자가 서로 다르면 다른 건이다. 어떤 규칙보다 이게 우선한다.
-    const kDigits = digitsOf(k);
-    if (keyDigits && kDigits && keyDigits !== kDigits) continue;
-
     const [short, long] = k.length <= key.length ? [k, key] : [key, k];
     let score = 0;
     if (short.length >= 3 && long.includes(short)) score = 1000 + short.length;
@@ -141,9 +135,17 @@ export function trackOpenItems(reports, pick) {
           entry.changed = true;
           entry.text = text; // 최신 문구로 보여준다
         }
+        // 합쳐진 원본을 모두 남긴다. 칸은 접되 내용은 버리지 않는다.
+        if (!entry.variants.some((v) => normText(v) === key)) entry.variants.push(text);
         seen.add(hit);
       } else if (!open.has(key)) {
-        open.set(key, { text, firstDate: dateKey, count: 1, changed: false });
+        open.set(key, {
+          text,
+          firstDate: dateKey,
+          count: 1,
+          changed: false,
+          variants: [text],
+        });
         seen.add(key);
       } else {
         seen.add(key);
@@ -206,6 +208,7 @@ export function buildStoreStatus(store, handoffs, today) {
       firstDate: from,
       count: t?.count ?? 1,
       changed: !!t?.changed,
+      variants: t?.variants ?? [o.name],
       // 기간을 모르면 null. (이전요청) 인데 이전 보고가 없는 경우.
       age: from ? daysBetween(from, today) : o.previous ? null : 0,
     };

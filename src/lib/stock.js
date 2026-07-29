@@ -69,6 +69,7 @@ export function buildStoreStock(handoffs, aliasMap, today) {
       firstDate: from,
       count: t?.count ?? 1,
       changed: !!t?.changed,
+      variants: t?.variants ?? [o.name],
       age,
     };
   };

@@ -2879,3 +2879,16 @@ body {
   gap: 4px;
   white-space: nowrap;
 }
+
+.item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.item-variants {
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-word;
+}
