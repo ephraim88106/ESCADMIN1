@@ -36,7 +36,7 @@ export function parseLegacy(text) {
     seenBody = true;
     // ■ 를 섹션 표시로 쓰는 변형도 있으므로, 매장명이 없으면 떼고 본다
     if (/^■/.test(line) && !detectStoreFromText(line)) {
-      line = line.replace(/^■\s*/, '');
+      line = line.replace(/^■\s*/, '').replace(/\s*■\s*$/, '');
       if (!line) continue;
     }
     // `[고정석 19]` 처럼 대괄호로 시작해도 매장명이 없으면 헤더가 아니다.
@@ -77,14 +77,24 @@ export function parseLegacy(text) {
         continue;
       }
     }
-    if (/^\(\d[\d\s,]+\)$/.test(line) && result.고정석.length === 0 && result.온도.length === 0) {
-      result.고정석.push(line.replace(/[()]/g, '').trim());
+    if (/^\(\s*\d[\d\s,]*\)$/.test(line)) {
+      const inner = line.replace(/[()]/g, '').trim();
+      if (result.고정석.length === 0 && result.온도.length === 0 && result.특이사항.length === 0) {
+        // 매장 헤더 바로 다음의 괄호 숫자는 고정석
+        result.고정석.push(inner);
+      } else if (result.특이사항.length > 0) {
+        // `*번호등 교체 필요좌석` 다음 줄의 `(38 65 66 ...)` = 그 고장의 대상 좌석
+        const i = result.특이사항.length - 1;
+        result.특이사항[i] = `${result.특이사항[i]} ${inner}`;
+      } else {
+        result.전달.push(inner);
+      }
       mode = null;
       continue;
     }
 
     // --- 해야할일 섹션 헤더 (`☆해야할일`, `해야할일`) ---
-    if (/^[▶★☆*]?\s*(해야\s?할\s?일|할\s?일|todo)\s*$/i.test(line)) {
+    if (/^[▶★☆*♤◇◆▲△※]?\s*(해야\s?할\s?일|할\s?일|todo)\s*$/i.test(line)) {
       mode = 'todo';
       continue;
     }
@@ -98,8 +108,8 @@ export function parseLegacy(text) {
     }
 
     // --- 특이사항 ---
-    if (/^[▶★☆*]/.test(line)) {
-      result.특이사항.push(line.replace(/^[▶★☆*]\s*/, ''));
+    if (/^[▶★☆*♤◇◆▲△※]/.test(line)) {
+      result.특이사항.push(line.replace(/^[▶★☆*♤◇◆▲△※]\s*/, ''));
       mode = null;
       continue;
     }
@@ -221,5 +231,5 @@ export function isTemperature(line) {
 }
 
 function isSectionHeader(line) {
-  return /^[ㄴ]?\s*빈\s?(자리|좌석)|^도착$|^주문$|^이전\s*주문$|^스터디|^카페|^[▶★☆*]?\s*(해야\s?할\s?일|할\s?일)\s*$/i.test(line);
+  return /^[ㄴ]?\s*빈\s?(자리|좌석)|^도착$|^주문$|^이전\s*주문$|^스터디|^카페|^[▶★☆*♤◇◆▲△※]?\s*(해야\s?할\s?일|할\s?일)\s*$/i.test(line);
 }

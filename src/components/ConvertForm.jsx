@@ -33,7 +33,7 @@ export default function ConvertForm({ rawText, upsertHandoff, findSameDay, onDon
   const sameDay = store && parsed ? findSameDay?.(store.id, parsed.dateKey) : null;
   // 주문 줄에 (재고 N) 이 하나도 없으면 재고 화면에 안 잡힌다
   const orderText = (fields.주문 || '').trim();
-  const stockEmpty = !!orderText && !/\(\s*재고/.test(orderText);
+  const stockEmpty = !!orderText && !/\(\s*(?:재고|현재고|현재|남은|잔량)/.test(orderText);
 
   const setField = (key, value) => setFields((p) => ({ ...p, [key]: value }));
 

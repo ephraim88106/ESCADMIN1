@@ -227,13 +227,19 @@ export default function Dashboard() {
                 🚚 미도착 발주
                 <span className="label-sub">문자의 (이전요청)</span>
               </div>
-              {selectedStatus.orderOverdue.length === 0 ? (
+              {!selectedStock || selectedStock.prevOrders.length === 0 ? (
                 <p className="store-modal-empty">없음</p>
               ) : (
                 <ul className="order-quick-list">
-                  {selectedStatus.orderOverdue.map((o, i) => (
+                  {selectedStock.prevOrders.map((o, i) => (
                     <li key={i} className="order-quick-item">
-                      <span>{o.text}</span>
+                      <span>
+                        {o.name}
+                        {o.urgent && <span className="urgent-badge">긴급</span>}
+                        {o.stock != null && (
+                          <span className="need-stock"> · 현재고 {o.stock}</span>
+                        )}
+                      </span>
                       <span className="wait-tag">{waitLabel(o.age)}</span>
                     </li>
                   ))}

@@ -139,7 +139,7 @@ function parseItem(line) {
   const urgent = /#긴급|#급|[☆★]{2,}/.test(raw);
 
   const stockMatch = raw.match(
-    /\(\s*재고\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:[,·]\s*개봉\s*[:：]?\s*(\d+(?:\.\d+)?)\s*)?\)/
+    /\(\s*(?:재고|현재고|현재|남은|잔량)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:[,·]\s*개봉\s*[:：]?\s*(\d+(?:\.\d+)?)\s*)?\)/
   );
   const stock = stockMatch
     ? Number((parseFloat(stockMatch[1]) + (stockMatch[2] ? parseFloat(stockMatch[2]) : 0)).toFixed(2))
@@ -147,7 +147,7 @@ function parseItem(line) {
 
   const body = raw
     .replace(/\(\s*이전\s*요청\s*\)/g, '')
-    .replace(/\(\s*재고[^)]*\)/g, '')
+    .replace(/\(\s*(?:재고|현재고|현재|남은|잔량)[^)]*\)/g, '')
     .replace(/#\S+/g, '')
     .replace(/[☆★]{2,}/g, '')
     .replace(/\s{2,}/g, ' ')

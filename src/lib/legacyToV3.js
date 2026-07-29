@@ -64,9 +64,11 @@ function zoneOf(line) {
 }
 
 // 특이사항 한 덩어리에 고장·상시안내·해야할일이 섞여 온다. 키워드로 나눈다.
-const FAULT_HINT = /고장|안\s?됨|안\s?켜|안\s?꺼|안\s?나|오류|누수|막힘|파손|깨|불량|작동|멈춤|끊김|소음|악취|더러/;
+// '교체 필요'는 할 일이 아니라 고장이다 (2026-07-29 주인님 지적).
+// 고쳐야 할 물건이 있다는 뜻이므로 미해결 나이 추적 대상이어야 한다.
+const FAULT_HINT = /고장|교체|수리|안\s?됨|안\s?켜|안\s?꺼|안\s?나|안\s?들어|오류|누수|새는|막힘|파손|깨|불량|작동|멈춤|끊김|터짐|나감|소음|악취|더러/;
 const STANDING_HINT = /제공|전용|비밀번호|비번|청소|금지|안내|닫은|닫힌|어댑터|없는\s?자리|사용/;
-const TODO_HINT = /붙이|정리|교체\s?필요|확인\s?필요|해야|요청|주문\s?필요|신청/;
+const TODO_HINT = /붙이|설치|정리|확인\s?필요|해야|요청|주문\s?필요|신청|비치/;
 // 주문 목록에 섞여 들어오는 점검 항목 (화곡 `제습기 물 비움` 등)
 const CHECK_HINT = /물\s?비움|물통\s?비우|창문\s?(확인|닫)|소등|잠금|선풍기\s?확인|냉난방기|쓰레기통\s?(비움|화목)/;
 // 위치·보관 안내는 상시안내로 (`도구함 오른쪽 제일 위칸에 나무꼬치 있음`)
@@ -81,9 +83,10 @@ function extractCleaningDays(line) {
 }
 
 function classifyNote(line) {
-  if (TODO_HINT.test(line)) return '해야할일';
-  if (PLACE_HINT.test(line) && !FAULT_HINT.test(line)) return '상시안내';
+  if (CHECK_HINT.test(line)) return '점검';
   if (FAULT_HINT.test(line)) return '고장';
+  if (TODO_HINT.test(line)) return '해야할일';
+  if (PLACE_HINT.test(line)) return '상시안내';
   if (STANDING_HINT.test(line)) return '상시안내';
   // 애매하면 고장으로 둔다. 미해결로 떠서 눈에 띄는 편이 놓치는 것보다 안전하다.
   return '고장';
@@ -120,13 +123,14 @@ export function legacyToDraft(text, now = new Date()) {
   fields.빈자리 = seats(get('빈자리'));
 
   // 특이사항 → 고장 / 상시안내 / 해야할일
-  const buckets = { 고장: [], 상시안내: [], 해야할일: [] };
+  const buckets = { 고장: [], 상시안내: [], 해야할일: [], 점검: [] };
   for (const line of toLines(get('특이사항'))) {
     buckets[classifyNote(line)].push(line);
   }
   fields.고장 = buckets.고장.join('\n');
   fields.상시안내 = buckets.상시안내.join('\n');
   fields.해야할일 = buckets.해야할일.join('\n');
+  fields.점검 = buckets.점검.join('\n');
 
   // 온도 → 구역별로 묶어 ㅁ구역명 형식으로
   const tempLines = toLines(get('온도체크'));
@@ -154,7 +158,7 @@ export function legacyToDraft(text, now = new Date()) {
       checkLines.push(line.replace(/\(\s*이전\s*요청\s*\)/, '').trim());
       continue;
     }
-    if (/\(\s*재고/.test(line)) stockCount += 1;
+    if (/\(\s*(?:재고|현재고|현재|남은|잔량)/.test(line)) stockCount += 1;
     const urgent = /[☆★]{2,}/.test(line);
     let out = line
       .replace(/[☆★]{2,}/g, '')
@@ -172,10 +176,6 @@ export function legacyToDraft(text, now = new Date()) {
   fields.해야할일 = [fields.해야할일, ...toLines(get('해야할일'))]
     .filter(Boolean)
     .join('\n');
-  if (checkLines.length) {
-    fields.점검 = [fields.점검, ...checkLines].filter(Boolean).join('\n');
-    notes.push(`점검 항목으로 보이는 ${checkLines.length}줄을 ■점검으로 옮겼습니다. 결과(O/X)를 적어주세요.`);
-  }
   if (stockCount) {
     notes.push(`주문 ${stockCount}줄에서 (재고 N) 을 읽었습니다. 재고는 주문 줄에 그대로 둡니다.`);
   }
@@ -185,17 +185,29 @@ export function legacyToDraft(text, now = new Date()) {
   const rest = [];
   const movedOrders = [];
   const movedStanding = [];
+  const movedFaults = [];
   for (const line of toLines(get('전달사항'))) {
     if (/청소/.test(line)) {
       const days = extractCleaningDays(line);
       movedStanding.push(days ? `청소요일 ${days}` : line);
     } else if (/주문|발주|시켜|신청|부탁/.test(line) && /\d/.test(line)) {
       movedOrders.push(line);
+    } else if (CHECK_HINT.test(line)) {
+      checkLines.push(line);
+    } else if (FAULT_HINT.test(line)) {
+      movedFaults.push(line);
     } else if (PLACE_HINT.test(line) && !FAULT_HINT.test(line)) {
       movedStanding.push(line);
     } else {
       rest.push(line);
     }
+  }
+  if (movedFaults.length) {
+    fields.고장 = [fields.고장, ...movedFaults].filter(Boolean).join('\n');
+  }
+  if (checkLines.length) {
+    fields.점검 = [fields.점검, ...checkLines].filter(Boolean).join('\n');
+    notes.push(`점검 항목으로 보이는 ${checkLines.length}줄을 ■점검으로 옮겼습니다. 결과(O/X)를 적어주세요.`);
   }
   if (movedOrders.length) {
     fields.주문 = [fields.주문, ...movedOrders].filter(Boolean).join('\n');

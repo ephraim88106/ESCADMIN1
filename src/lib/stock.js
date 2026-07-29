@@ -173,12 +173,14 @@ export function buildStockView(stores, handoffsByStore, items, aliasMap, today =
  */
 export function buildStoreReorder(handoffs, aliasMap, today = todayKey()) {
   const info = buildStoreStock(handoffs, aliasMap, today);
-  // 문자의 ■주문 그대로. 남은 재고를 알면 함께 보여준다.
-  const needOrder = info.newOrders.map((o) => ({
-    ...o,
-    stock: info.stock.get(o.name)?.qty ?? null,
-  }));
-  return { ...info, needOrder };
+  // 문자의 ■주문 그대로. 남은 재고는 양쪽 모두에 붙인다 —
+  // 안 온 발주도 재고가 0이면 더 급하다.
+  const withStock = (o) => ({ ...o, stock: info.stock.get(o.name)?.qty ?? null });
+  return {
+    ...info,
+    needOrder: info.newOrders.map(withStock),
+    prevOrders: info.prevOrders.map(withStock),
+  };
 }
 
 /** 한 매장 발주 목록을 카톡·메모로 옮길 수 있는 텍스트로 */
@@ -197,7 +199,8 @@ export function storeReorderToText(storeName, needOrder, pending) {
   if (pending.length) {
     lines.push('', '■미도착 발주');
     for (const p of pending) {
-      lines.push(`${p.name}${qtyText(p)} — ${p.age <= 0 ? '오늘 요청' : `${p.age}일째 대기`}`);
+      const stock = p.stock != null ? ` (현재고 ${p.stock})` : '';
+      lines.push(`${p.name}${qtyText(p)}${stock} — ${p.age <= 0 ? '오늘 요청' : `${p.age}일째 대기`}`);
     }
   }
   return lines.join('\n');
