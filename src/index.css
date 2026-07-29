@@ -2799,3 +2799,28 @@ body {
   padding: 1px 7px;
   white-space: nowrap;
 }
+
+/* 발주 필요 / 미도착 구분 */
+.reorder-store.pending {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.reorder-stock {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.reorder-urgent {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--danger);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.need-stock {
+  font-weight: 500;
+  color: var(--text-muted);
+}

@@ -67,7 +67,7 @@ export default function Dashboard() {
     const text = storeReorderToText(
       selectedStatus.store.name,
       selectedStock.needOrder,
-      selectedStock.pendingOrders
+      selectedStock.prevOrders
     );
     navigator.clipboard?.writeText(text).catch(() => {});
     window.alert('발주 목록을 복사했습니다.');
@@ -106,8 +106,14 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-label">발주 미도착</div>
-          <div className={`summary-value${stats.orderOverdue > 0 ? ' text-warn' : ''}`}>
+          <div className="summary-label">발주 필요</div>
+          <div className={`summary-value${stats.needOrder > 0 ? ' text-warn' : ''}`}>
+            {loading ? '...' : `${stats.needOrder}건`}
+          </div>
+        </div>
+        <div className="summary-card">
+          <div className="summary-label">미도착 발주</div>
+          <div className={`summary-value${stats.orderOverdue > 0 ? ' text-danger' : ''}`}>
             {loading ? '...' : `${stats.orderOverdue}건`}
           </div>
         </div>
@@ -185,7 +191,7 @@ export default function Dashboard() {
             <div className="store-modal-section">
               <div className="store-modal-label">
                 📦 발주 필요
-                <span className="label-sub">아직 주문 안 함</span>
+                <span className="label-sub">문자의 ■주문</span>
                 {selectedStock?.needOrder.length > 0 && (
                   <button className="btn-sm btn-secondary label-action" onClick={handleCopyReorder}>
                     복사
@@ -194,15 +200,18 @@ export default function Dashboard() {
               </div>
               {!selectedStock || selectedStock.needOrder.length === 0 ? (
                 <p className="store-modal-empty">
-                  {selectedStock?.reported ? '없음' : '재고 보고가 없습니다'}
+                  {selectedStock?.reported ? '없음' : '보고가 없습니다'}
                 </p>
               ) : (
                 <ul className="order-quick-list">
                   {selectedStock.needOrder.map((n) => (
                     <li key={n.name} className="order-quick-item">
                       <span>{n.name}</span>
-                      <span className={`need-qty${n.qty <= 0 ? ' zero' : ''}`}>
-                        {n.qty}{n.unit} / 임계 {n.threshold}
+                      <span className="need-qty">
+                        {n.qty != null ? `${n.qty}${n.unit}` : '수량 미기재'}
+                        {n.stock != null && (
+                          <span className="need-stock"> · 현재고 {n.stock}</span>
+                        )}
                       </span>
                     </li>
                   ))}
@@ -213,7 +222,7 @@ export default function Dashboard() {
             <div className="store-modal-section">
               <div className="store-modal-label">
                 🚚 미도착 발주
-                <span className="label-sub">이미 주문함</span>
+                <span className="label-sub">문자의 (이전요청)</span>
               </div>
               {selectedStatus.orderOverdue.length === 0 ? (
                 <p className="store-modal-empty">없음</p>

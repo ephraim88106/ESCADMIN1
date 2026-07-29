@@ -104,9 +104,21 @@ export function buildStoreStatus(store, handoffs, today) {
 
   const openFaults = trackOpenItems(reports, (p) => p.faults);
   const openTodos = trackOpenItems(reports, (p) => p.todos);
-  const openOrders = trackOpenItems(reports, (p) =>
-    (p.orders || []).map((o) => o.name)
-  );
+  // 발주는 문자에 쓰인 대로 나눈다.
+  //   (이전요청) 없음 → 발주 필요, (이전요청) 있음 → 미도착 발주
+  // 며칠째인지는 '언제 처음 ■주문에 나왔나'로 센다.
+  const orderFirstSeen = new Map();
+  for (const o of trackOpenItems(reports, (p) => (p.orders || []).map((x) => x.name))) {
+    orderFirstSeen.set(normText(o.text), o.firstDate);
+  }
+  const latestOrders = parsed?.orders || [];
+  const asOrder = (o) => ({
+    text: o.name,
+    firstDate: orderFirstSeen.get(normText(o.name)) || lastDateKey,
+    age: daysBetween(orderFirstSeen.get(normText(o.name)) || lastDateKey, today),
+  });
+  const newOrders = latestOrders.filter((o) => !o.previous).map(asOrder);
+  const openOrders = latestOrders.filter((o) => o.previous).map(asOrder);
 
   const withAge = (items) =>
     items
@@ -115,12 +127,12 @@ export function buildStoreStatus(store, handoffs, today) {
 
   const faults = withAge(openFaults);
   const todos = withAge(openTodos);
-  const orders = withAge(openOrders);
+  const orders = openOrders.slice().sort((a, b) => b.age - a.age);
 
   const openItems = [...faults, ...todos];
   const maxAge = openItems.length ? openItems[0].age : 0;
   const staleCount = openItems.filter((i) => i.age >= THRESHOLDS.staleDays).length;
-  const orderOverdue = orders.filter((o) => o.age >= 1);
+  const orderOverdue = orders;
   const temps = tempFlags(parsed);
 
   // 미제출은 별도 티어. 점수로 섞지 않아야 "왜 1위인지"가 직관적이다.
@@ -149,8 +161,11 @@ export function buildStoreStatus(store, handoffs, today) {
   if (orderOverdue.length > 0) {
     reasons.push({
       kind: 'order',
-      text: `발주 미도착 ${orderOverdue.length}건 (최장 ${orderOverdue[0].age}일)`,
+      text: `미도착 발주 ${orderOverdue.length}건 (최장 ${orderOverdue[0].age}일)`,
     });
+  }
+  if (newOrders.length > 0) {
+    reasons.push({ kind: 'order', text: `발주 필요 ${newOrders.length}건` });
   }
   if (temps.length > 0) {
     reasons.push({ kind: 'temp', text: `온습도 이탈 ${temps.length}곳` });
@@ -165,6 +180,7 @@ export function buildStoreStatus(store, handoffs, today) {
     faults,
     todos,
     orders,
+    newOrders,
     orderOverdue,
     openCount: openItems.length,
     maxAge,
@@ -173,7 +189,12 @@ export function buildStoreStatus(store, handoffs, today) {
     tier,
     score,
     reasons,
-    isClear: submittedToday && openItems.length === 0 && temps.length === 0 && orderOverdue.length === 0,
+    isClear:
+      submittedToday &&
+      openItems.length === 0 &&
+      temps.length === 0 &&
+      orderOverdue.length === 0 &&
+      newOrders.length === 0,
   };
 }
 
@@ -196,6 +217,7 @@ export function summarize(list) {
     missing: list.filter((s) => !s.submittedToday).length,
     openTotal: list.reduce((a, s) => a + s.openCount, 0),
     staleTotal: list.reduce((a, s) => a + s.staleCount, 0),
+    needOrder: list.reduce((a, s) => a + s.newOrders.length, 0),
     orderOverdue: list.reduce((a, s) => a + s.orderOverdue.length, 0),
     tempFlags: list.reduce((a, s) => a + s.tempFlags.length, 0),
   };

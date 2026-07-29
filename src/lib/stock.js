@@ -8,9 +8,12 @@
 //   ■주문  = 요청함. (이전요청) 이면 아직 안 옴 → 재고는 변하지 않는다
 //   ■입고  = 실제 도착 → 이때만 재고가 늘어난다
 //
-// 발주 판정:
-//   현재고 < 임계치 & 대기 중인 발주 없음 → '발주 필요'
-//   현재고 < 임계치 & 대기 중인 발주 있음 → '발주함 (n일 대기)'
+// 발주 분류는 '문자에 쓰인 대로' 따른다 (2026-07-29 확정).
+//   ■주문 중 (이전요청) 없는 줄 → 발주 필요   = 담당자가 오늘 새로 요청한 것
+//   ■주문 중 (이전요청) 붙은 줄 → 미도착 발주 = 전에 요청했는데 아직 안 온 것
+//
+// 임계치는 발주 판정에 쓰지 않고, 매트릭스에서 '재고가 적다'를 색으로 보여주는 데만 쓴다.
+// 재고가 바닥인데 담당자가 ■주문에 안 적었다면 목록에 뜨지 않는다 — 문자가 기준이다.
 
 import { foldByDate, trackOpenItems, daysBetween, todayKey } from './patrol';
 import { canonicalName, itemThreshold } from './itemName';
@@ -35,21 +38,37 @@ export function buildStoreStock(handoffs, aliasMap, today) {
     }
   }
 
-  // 대기 중인 발주: ■주문에 계속 남아 있는 줄 = 아직 안 닫힌 요청
-  const pendingOrders = trackOpenItems(v3, (p) =>
-    (p.orders || []).map((o) => o.name)
-  ).map((o) => ({
-    name: canonicalName(o.text, aliasMap),
-    raw: o.text,
-    firstDate: o.firstDate,
-    age: daysBetween(o.firstDate, today),
-  }));
+  // 며칠째인지는 '언제 처음 ■주문에 나왔나'로 계산한다.
+  // (이전요청) 표시가 붙기 전부터 세야 실제 대기 일수가 나온다.
+  const firstSeen = new Map();
+  for (const o of trackOpenItems(v3, (p) => (p.orders || []).map((x) => x.name))) {
+    firstSeen.set(canonicalName(o.text, aliasMap), o.firstDate);
+  }
+
+  const latest = last ? last.handoff.parsed.orders || [] : [];
+  const toEntry = (o) => {
+    const name = canonicalName(o.name, aliasMap);
+    return {
+      name,
+      raw: o.name,
+      qty: o.qty,
+      unit: o.unit || '',
+      urgent: !!o.urgent,
+      firstDate: firstSeen.get(name) || last?.dateKey || null,
+      age: daysBetween(firstSeen.get(name) || last?.dateKey, today),
+    };
+  };
+
+  const newOrders = latest.filter((o) => !o.previous).map(toEntry);
+  const prevOrders = latest.filter((o) => o.previous).map(toEntry);
 
   return {
     lastDateKey: last?.dateKey ?? null,
     reported: !!last,
     stock,
-    pendingOrders,
+    newOrders,
+    prevOrders,
+    pendingOrders: [...newOrders, ...prevOrders],
   };
 }
 
@@ -57,7 +76,7 @@ export function buildStoreStock(handoffs, aliasMap, today) {
  * 17개 매장 전체 재고 뷰.
  * @returns {{ items, reorder, rawNames, storeInfo }}
  *   items      매장×품목 매트릭스용 (품목 하나 = 한 행)
- *   reorder    임계치 미만인 것만 추린 발주 목록
+ *   reorder    문자의 ■주문을 품목별로 묶은 발주 목록 (발주 필요 / 미도착 구분)
  *   rawNames   문자에 실제로 등장한 원본 품목명 (별칭 정리 화면용)
  */
 export function buildStockView(stores, handoffsByStore, items, aliasMap, today = todayKey()) {
@@ -110,16 +129,31 @@ export function buildStockView(stores, handoffsByStore, items, aliasMap, today =
   // 부족한 매장이 많은 품목이 위로, 그 다음 많이 쓰는 품목순
   rows.sort((a, b) => b.lowCount - a.lowCount || b.usedBy - a.usedBy || a.name.localeCompare(b.name));
 
-  const reorder = rows
-    .map((row) => ({
-      name: row.name,
-      threshold: row.threshold,
-      stores: stores
-        .map((store) => ({ store, ...row.cells[store.id] }))
-        .filter((c) => c.low || (c.order && c.qty === null)),
-    }))
-    .filter((r) => r.stores.length > 0)
-    .sort((a, b) => b.stores.length - a.stores.length);
+  // 발주 목록은 문자에 쓰인 ■주문 그대로 묶는다. 임계치로 만들어내지 않는다.
+  const grouped = new Map();
+  const add = (store, o, kind) => {
+    if (!grouped.has(o.name)) grouped.set(o.name, { name: o.name, stores: [] });
+    grouped.get(o.name).stores.push({
+      store,
+      kind, // 'new' = 발주 필요, 'pending' = 미도착
+      qty: o.qty,
+      unit: o.unit,
+      age: o.age,
+      urgent: o.urgent,
+      stock: storeInfo[store.id].stock.get(o.name)?.qty ?? null,
+    });
+  };
+  for (const store of stores) {
+    const info = storeInfo[store.id];
+    for (const o of info.newOrders) add(store, o, 'new');
+    for (const o of info.prevOrders) add(store, o, 'pending');
+  }
+
+  const reorder = [...grouped.values()].sort((a, b) => {
+    const pend = (r) => r.stores.filter((x) => x.kind === 'pending').length;
+    const oldest = (r) => Math.max(0, ...r.stores.map((x) => x.age || 0));
+    return oldest(b) - oldest(a) || pend(b) - pend(a) || b.stores.length - a.stores.length;
+  });
 
   return { items: rows, reorder, rawNames: [...rawNames], storeInfo };
 }
@@ -132,31 +166,32 @@ export function buildStockView(stores, handoffsByStore, items, aliasMap, today =
  */
 export function buildStoreReorder(handoffs, aliasMap, today = todayKey()) {
   const info = buildStoreStock(handoffs, aliasMap, today);
-  const needOrder = [];
-
-  for (const [name, entry] of info.stock) {
-    const threshold = itemThreshold(name, aliasMap, DEFAULT_THRESHOLD);
-    if (entry.qty >= threshold) continue;
-    // 이미 주문한 품목은 '미도착 발주' 쪽에서 다룬다
-    if (info.pendingOrders.some((o) => o.name === name)) continue;
-    needOrder.push({ name, qty: entry.qty, unit: entry.unit, threshold });
-  }
-
-  needOrder.sort((a, b) => a.qty - b.qty || a.name.localeCompare(b.name));
+  // 문자의 ■주문 그대로. 남은 재고를 알면 함께 보여준다.
+  const needOrder = info.newOrders.map((o) => ({
+    ...o,
+    stock: info.stock.get(o.name)?.qty ?? null,
+  }));
   return { ...info, needOrder };
 }
 
 /** 한 매장 발주 목록을 카톡·메모로 옮길 수 있는 텍스트로 */
 export function storeReorderToText(storeName, needOrder, pending) {
-  const lines = [`[${storeName}] 발주 요청`];
-  if (needOrder.length === 0 && pending.length === 0) return `${lines[0]}\n발주할 항목이 없습니다.`;
+  const head = `[${storeName}] 발주 요청`;
+  if (needOrder.length === 0 && pending.length === 0) return `${head}\n발주할 항목이 없습니다.`;
+  const lines = [head];
+  const qtyText = (o) => (o.qty != null ? ` ${o.qty}${o.unit}` : '');
   if (needOrder.length) {
-    lines.push('', '■주문 필요');
-    for (const n of needOrder) lines.push(`${n.name} — 남은 수량 ${n.qty}${n.unit} (임계 ${n.threshold})`);
+    lines.push('', '■발주 필요');
+    for (const n of needOrder) {
+      const stock = n.stock != null ? ` (현재고 ${n.stock})` : '';
+      lines.push(`${n.name}${qtyText(n)}${stock}${n.urgent ? ' #긴급' : ''}`);
+    }
   }
   if (pending.length) {
-    lines.push('', '■이미 발주함 (미도착)');
-    for (const p of pending) lines.push(`${p.name} — ${p.age <= 0 ? '오늘 요청' : `${p.age}일째 대기`}`);
+    lines.push('', '■미도착 발주');
+    for (const p of pending) {
+      lines.push(`${p.name}${qtyText(p)} — ${p.age <= 0 ? '오늘 요청' : `${p.age}일째 대기`}`);
+    }
   }
   return lines.join('\n');
 }
@@ -167,15 +202,16 @@ export function waitLabel(age) {
 }
 
 export function reorderToText(reorder) {
-  if (!reorder.length) return '발주 필요 항목이 없습니다.';
+  if (!reorder.length) return '■주문에 올라온 항목이 없습니다.';
   return reorder
     .map((r) => {
       const parts = r.stores.map((s) => {
-        const qty = s.qty === null ? '미기재' : `${s.qty}`;
-        const wait = s.order ? ` · ${waitLabel(s.order.age)}` : '';
-        return `${s.store.name} ${qty}${wait}`;
+        const qty = s.qty != null ? ` ${s.qty}${s.unit || ''}` : '';
+        const stock = s.stock != null ? ` (현재고 ${s.stock})` : '';
+        const tail = s.kind === 'pending' ? ` — ${waitLabel(s.age)}` : '';
+        return `${s.store.name}${qty}${stock}${tail}${s.urgent ? ' #긴급' : ''}`;
       });
-      return `${r.name} (임계 ${r.threshold})\n  ${parts.join('\n  ')}`;
+      return `${r.name}\n  ${parts.join('\n  ')}`;
     })
     .join('\n\n');
 }

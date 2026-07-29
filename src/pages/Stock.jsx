@@ -74,11 +74,7 @@ export default function Stock() {
 /* ===== 발주 필요 목록 ===== */
 function ReorderList({ view }) {
   if (view.reorder.length === 0) {
-    return (
-      <p className="empty-state">
-        임계치 미만인 품목이 없습니다. (기본 임계치 {DEFAULT_THRESHOLD})
-      </p>
-    );
+    return <p className="empty-state">■주문에 올라온 항목이 없습니다.</p>;
   }
 
   return (
@@ -90,19 +86,18 @@ function ReorderList({ view }) {
             <span className="reorder-count">{row.stores.length}개 매장</span>
           </div>
           <div className="reorder-stores">
-            {row.stores.map((s) => (
-              <div key={s.store.id} className="reorder-store">
+            {row.stores.map((s, i) => (
+              <div key={`${s.store.id}-${i}`} className={`reorder-store${s.kind === 'pending' ? ' pending' : ''}`}>
                 <span className="reorder-store-name">{s.store.name}</span>
-                <span className={`reorder-qty${s.qty !== null && s.qty <= 0 ? ' zero' : ''}`}>
-                  {s.qty === null ? '미기재' : `${s.qty}${s.unit}`}
+                <span className="reorder-qty">
+                  {s.qty != null ? `${s.qty}${s.unit || ''}` : '수량 미기재'}
                 </span>
-                {s.order && (
-                  <span className="reorder-wait">{waitLabel(s.order.age)}</span>
-                )}
+                {s.stock != null && <span className="reorder-stock">현재고 {s.stock}</span>}
+                {s.kind === 'pending' && <span className="reorder-wait">{waitLabel(s.age)}</span>}
+                {s.urgent && <span className="reorder-urgent">긴급</span>}
               </div>
             ))}
           </div>
-          <div className="reorder-threshold">임계 {row.threshold}</div>
         </div>
       ))}
     </div>
