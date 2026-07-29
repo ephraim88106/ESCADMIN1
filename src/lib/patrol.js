@@ -47,10 +47,37 @@ export function foldByDate(handoffs) {
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 }
 
+/** 길이가 같고 한 글자만 다른가 (`번호등13` vs `번호등14` 는 다르지만 오탐 위험은 감수) */
+function oneCharApart(a, b) {
+  if (a.length !== b.length || a.length < 4) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i] && ++diff > 1) return false;
+  }
+  return diff === 1;
+}
+
+/**
+ * 이번 줄이 이미 열려 있는 항목과 같은 건인지 찾는다.
+ * 담당자가 매일 조금씩 다르게 적기 때문에 (`번호등 13` → `번호등 13번 고장`)
+ * 글자가 정확히 같을 때만 같은 건으로 보면 나이가 매일 리셋되고 칸이 늘어난다.
+ */
+function findSame(key, prevKeys) {
+  if (prevKeys.has(key)) return key;
+  for (const k of prevKeys) {
+    const [short, long] = k.length <= key.length ? [k, key] : [key, k];
+    if (short.length >= 3 && long.includes(short)) return k;
+    if (oneCharApart(k, key)) return k;
+  }
+  return null;
+}
+
 /**
  * 오래된 보고부터 훑으며 열린 항목을 추적한다.
  * - 이번 보고에 없는 항목 → 해결된 것으로 보고 제거
  * - 처음 등장한 항목 → firstDate 기록
+ * - 다시 등장한 항목 → count 증가. 문구가 바뀌었으면 최신 문구로 갱신하고 changed 표시
+ *
  * v3로 파싱된 보고만 사용한다. 구양식 보고를 섞으면 전량 '해결'로 오판된다.
  */
 export function trackOpenItems(reports, pick) {
@@ -58,14 +85,32 @@ export function trackOpenItems(reports, pick) {
   for (const { dateKey, handoff } of reports) {
     if (handoff.parsed?.formatVersion !== 'v3') continue;
     const items = pick(handoff.parsed) || [];
-    const present = new Set(items.map(normText));
 
-    for (const key of [...open.keys()]) {
-      if (!present.has(key)) open.delete(key);
-    }
+    // 같은 보고 안의 두 줄이 서로 합쳐지지 않도록, 이전 보고까지의 키만 후보로 둔다
+    const prevKeys = new Set(open.keys());
+    const seen = new Set();
+
     for (const text of items) {
       const key = normText(text);
-      if (!open.has(key)) open.set(key, { text, firstDate: dateKey });
+      const hit = findSame(key, prevKeys);
+      if (hit) {
+        const entry = open.get(hit);
+        if (!seen.has(hit)) entry.count += 1;
+        if (normText(entry.text) !== key) {
+          entry.changed = true;
+          entry.text = text; // 최신 문구로 보여준다
+        }
+        seen.add(hit);
+      } else if (!open.has(key)) {
+        open.set(key, { text, firstDate: dateKey, count: 1, changed: false });
+        seen.add(key);
+      } else {
+        seen.add(key);
+      }
+    }
+
+    for (const k of [...open.keys()]) {
+      if (!seen.has(k)) open.delete(k);
     }
   }
   return [...open.values()];
@@ -107,16 +152,19 @@ export function buildStoreStatus(store, handoffs, today) {
   // 발주는 문자에 쓰인 대로 나눈다.
   //   (이전요청) 없음 → 발주 필요, (이전요청) 있음 → 미도착 발주
   // 며칠째인지는 '언제 처음 ■주문에 나왔나'로 센다.
-  const orderFirstSeen = new Map();
+  const orderTrack = new Map();
   for (const o of trackOpenItems(reports, (p) => (p.orders || []).map((x) => x.name))) {
-    orderFirstSeen.set(normText(o.text), o.firstDate);
+    orderTrack.set(normText(o.text), o);
   }
   const latestOrders = parsed?.orders || [];
   const asOrder = (o) => {
-    const from = orderFirstSeen.get(normText(o.name)) || null;
+    const t = orderTrack.get(normText(o.name)) || null;
+    const from = t?.firstDate || null;
     return {
       text: o.name,
       firstDate: from,
+      count: t?.count ?? 1,
+      changed: !!t?.changed,
       // 기간을 모르면 null. (이전요청) 인데 이전 보고가 없는 경우.
       age: from ? daysBetween(from, today) : o.previous ? null : 0,
     };

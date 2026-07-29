@@ -20,6 +20,21 @@ function AgeTag({ age }) {
   return <span className={cls}>{age}일</span>;
 }
 
+/**
+ * 같은 항목이 몇 번의 보고에 올라왔는지.
+ * 칸을 늘리지 않고 한 줄로 접되, 얼마나 되풀이됐는지는 이 배지로 보여준다.
+ */
+function RepeatTag({ count, changed }) {
+  if (!count) return null;
+  const cls = count >= 3 ? 'repeat-tag hot' : 'repeat-tag';
+  return (
+    <span className={cls} title={changed ? '문구가 바뀌었지만 같은 건으로 이어붙였습니다' : `${count}번 올라옴`}>
+      +{count}
+      {changed && <span className="repeat-changed">✎</span>}
+    </span>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { byStore, loading, upsertHandoff, findSameDay } = useAllHandoffs();
@@ -211,6 +226,7 @@ export default function Dashboard() {
                         {n.urgent && <span className="urgent-badge">긴급</span>}
                       </span>
                       <span className="need-qty">
+                        <RepeatTag count={n.count} changed={n.changed} />
                         {n.qty != null ? `${n.qty}${n.unit}` : '수량 미기재'}
                         {n.stock != null && (
                           <span className="need-stock"> · 현재고 {n.stock}</span>
@@ -240,7 +256,10 @@ export default function Dashboard() {
                           <span className="need-stock"> · 현재고 {o.stock}</span>
                         )}
                       </span>
-                      <span className="wait-tag">{waitLabel(o.age)}</span>
+                      <span className="order-quick-tags">
+                        <RepeatTag count={o.count} changed={o.changed} />
+                        <span className="wait-tag">{waitLabel(o.age)}</span>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -296,7 +315,7 @@ function DetailSection({ title, items, empty }) {
           {items.map((it, i) => (
             <li key={i} className="order-quick-item">
               <span>{it.text}</span>
-              <AgeTag age={it.age} />
+              <RepeatTag count={it.count} changed={it.changed} />
             </li>
           ))}
         </ul>

@@ -47,15 +47,16 @@ export function buildStoreStock(handoffs, aliasMap, today) {
 
   // 며칠째인지는 '언제 처음 ■주문에 나왔나'로 계산한다.
   // (이전요청) 표시가 붙기 전부터 세야 실제 대기 일수가 나온다.
-  const firstSeen = new Map();
+  const track = new Map();
   for (const o of trackOpenItems(v3, (p) => (p.orders || []).map((x) => x.name))) {
-    firstSeen.set(canonicalName(o.text, aliasMap), o.firstDate);
+    track.set(canonicalName(o.text, aliasMap), o);
   }
 
   const latest = last ? last.handoff.parsed.orders || [] : [];
   const toEntry = (o) => {
     const name = canonicalName(o.name, aliasMap);
-    const from = firstSeen.get(name) || null;
+    const t = track.get(name) || null;
+    const from = t?.firstDate || null;
     // 이전 보고에서 못 찾았는데 (이전요청) 이라고 쓰여 있으면 기간을 알 수 없다.
     // 0일로 두면 '오늘 요청'처럼 보여 담당자가 쓴 '이전'과 어긋난다.
     const age = from ? daysBetween(from, today) : o.previous ? null : 0;
@@ -66,6 +67,8 @@ export function buildStoreStock(handoffs, aliasMap, today) {
       unit: o.unit || '',
       urgent: !!o.urgent,
       firstDate: from,
+      count: t?.count ?? 1,
+      changed: !!t?.changed,
       age,
     };
   };
