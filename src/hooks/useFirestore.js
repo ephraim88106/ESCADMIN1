@@ -322,6 +322,147 @@ export function useAllHandoffs() {
   return { byStore, loading, upsertHandoff, findSameDay };
 }
 
+/**
+ * 품목 마스터. 문자에 나온 이름을 대표 품목으로 묶는다.
+ * 문서 형태: { canonical: '롤휴지', aliases: ['점보롤', '점보롤휴지'], threshold: 2 }
+ */
+export function useItems() {
+  const localKey = 'items_master';
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const refreshLocal = useCallback(() => {
+    setItems(getLocalData(localKey));
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) {
+      refreshLocal();
+      return;
+    }
+    const unsub = onSnapshot(collection(db, 'items'), (snapshot) => {
+      setItems(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return unsub;
+  }, [refreshLocal]);
+
+  const writeLocal = (next) => {
+    setLocalData(localKey, next);
+    refreshLocal();
+  };
+
+  const findByCanonical = (name) =>
+    items.find((i) => i.canonical === name) || null;
+
+  /**
+   * alias 를 target 대표 품목 아래로 넣는다.
+   * - alias 가 자기 문서를 갖고 있으면 별칭까지 흡수한 뒤 그 문서를 삭제
+   * - alias 가 다른 대표 품목의 별칭이었다면 거기서 떼어낸다
+   *   (한 이름이 두 대표에 동시에 속하면 합산이 어느 쪽으로 갈지 모호해진다)
+   */
+  const mergeInto = async (targetCanonical, aliasName) => {
+    if (!targetCanonical || !aliasName || targetCanonical === aliasName) return;
+
+    const source = findByCanonical(aliasName);
+    const absorbed = [aliasName, ...(source?.aliases || [])];
+    const target = findByCanonical(targetCanonical);
+    const nextAliases = [...new Set([...(target?.aliases || []), ...absorbed])].filter(
+      (a) => a !== targetCanonical
+    );
+
+    // 옮겨오는 이름들을 붙들고 있던 다른 대표 품목에서 제거
+    const moving = new Set(absorbed);
+    const detachFrom = items.filter(
+      (i) =>
+        i.canonical !== targetCanonical &&
+        i.canonical !== aliasName &&
+        (i.aliases || []).some((a) => moving.has(a))
+    );
+
+    if (isFirebaseConfigured) {
+      for (const other of detachFrom) {
+        await updateDoc(doc(db, 'items', other.id), {
+          aliases: (other.aliases || []).filter((a) => !moving.has(a)),
+        });
+      }
+      if (target) {
+        await updateDoc(doc(db, 'items', target.id), { aliases: nextAliases });
+      } else {
+        await addDoc(collection(db, 'items'), {
+          canonical: targetCanonical,
+          aliases: nextAliases,
+          threshold: null,
+        });
+      }
+      if (source) await deleteDoc(doc(db, 'items', source.id));
+      return;
+    }
+
+    let list = getLocalData(localKey)
+      .filter((i) => i.canonical !== aliasName)
+      .map((i) =>
+        i.canonical === targetCanonical
+          ? i
+          : { ...i, aliases: (i.aliases || []).filter((a) => !moving.has(a)) }
+      );
+    if (list.some((i) => i.canonical === targetCanonical)) {
+      list = list.map((i) =>
+        i.canonical === targetCanonical ? { ...i, aliases: nextAliases } : i
+      );
+    } else {
+      list.push({
+        id: generateId(),
+        canonical: targetCanonical,
+        aliases: nextAliases,
+        threshold: null,
+      });
+    }
+    writeLocal(list);
+  };
+
+  /** 대표 품목에서 별칭 하나를 떼어낸다 */
+  const unmerge = async (targetCanonical, aliasName) => {
+    const target = findByCanonical(targetCanonical);
+    if (!target) return;
+    const nextAliases = (target.aliases || []).filter((a) => a !== aliasName);
+    if (isFirebaseConfigured) {
+      await updateDoc(doc(db, 'items', target.id), { aliases: nextAliases });
+      return;
+    }
+    writeLocal(
+      getLocalData(localKey).map((i) =>
+        i.canonical === targetCanonical ? { ...i, aliases: nextAliases } : i
+      )
+    );
+  };
+
+  /** 품목별 발주 임계치. null 이면 기본값(2)을 쓴다 */
+  const setThreshold = async (canonical, threshold) => {
+    const target = findByCanonical(canonical);
+    const value = threshold === '' || threshold == null ? null : Number(threshold);
+
+    if (isFirebaseConfigured) {
+      if (target) {
+        await updateDoc(doc(db, 'items', target.id), { threshold: value });
+      } else {
+        await addDoc(collection(db, 'items'), { canonical, aliases: [], threshold: value });
+      }
+      return;
+    }
+    const list = getLocalData(localKey);
+    if (list.some((i) => i.canonical === canonical)) {
+      writeLocal(list.map((i) => (i.canonical === canonical ? { ...i, threshold: value } : i)));
+    } else {
+      list.push({ id: generateId(), canonical, aliases: [], threshold: value });
+      writeLocal(list);
+    }
+  };
+
+  return { items, loading, mergeInto, unmerge, setThreshold };
+}
+
 export function useChecklist(storeId, dateKey) {
   const localKey = `checklist_${storeId}_${dateKey}`;
   const [record, setRecord] = useState(null);

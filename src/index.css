@@ -2277,3 +2277,318 @@ body {
   background: var(--danger);
   color: #fff;
 }
+
+/* ============================================================
+   재고 현황 — 발주 필요 / 매장×품목 / 품목 정리
+   ============================================================ */
+
+.stock-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 12px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.stock-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.stock-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* === 발주 필요 === */
+.reorder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reorder-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.reorder-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reorder-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.reorder-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.reorder-stores {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reorder-store {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+.reorder-store-name {
+  font-weight: 600;
+}
+
+.reorder-qty {
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.reorder-qty.zero {
+  color: var(--danger);
+}
+
+.reorder-wait {
+  font-size: 10px;
+  font-weight: 600;
+  color: #3730a3;
+  background: #e0e7ff;
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.reorder-threshold {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* === 매트릭스 === */
+.matrix-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.matrix-legend b {
+  font-weight: 700;
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+.matrix-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+}
+
+.matrix {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.matrix th,
+.matrix td {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.matrix-corner,
+.matrix-row-head {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #f8fafc;
+  text-align: left;
+  font-weight: 700;
+  min-width: 84px;
+}
+
+.matrix-corner {
+  z-index: 3;
+}
+
+.matrix-col {
+  background: #f8fafc;
+  font-weight: 600;
+  min-width: 62px;
+  vertical-align: bottom;
+}
+
+.matrix-col-name {
+  display: block;
+}
+
+.matrix-col-th {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.matrix-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-low {
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.cell-order {
+  background: #e0e7ff;
+  color: #3730a3;
+  font-weight: 700;
+}
+
+.cell-missing {
+  color: #cbd5e1;
+}
+
+.cell-none {
+  color: #e2e8f0;
+}
+
+/* === 품목 정리 === */
+.name-section {
+  margin-bottom: 24px;
+}
+
+.name-section h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.name-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.merge-suggest,
+.merge-row,
+.master-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
+.master-row {
+  display: block;
+}
+
+.merge-pair,
+.merge-name {
+  flex: 1;
+  min-width: 120px;
+  font-size: 13px;
+}
+
+.merge-row select {
+  flex: 1;
+  min-width: 130px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.master-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.master-name {
+  font-weight: 700;
+}
+
+.master-threshold {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.master-threshold input {
+  width: 52px;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: center;
+}
+
+.master-aliases {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.alias-chip {
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.alias-chip:hover {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.merge-reason {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: #f1f5f9;
+  border-radius: 999px;
+  padding: 1px 6px;
+  margin-left: 6px;
+}

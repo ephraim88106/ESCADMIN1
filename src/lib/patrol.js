@@ -35,7 +35,7 @@ function normText(t) {
 /**
  * 하루 한 건으로 접는다. 같은 날 두 번 등록되면 나중 것이 이긴다(덮어쓰기 정책).
  */
-function foldByDate(handoffs) {
+export function foldByDate(handoffs) {
   const byDate = new Map();
   for (const h of handoffs) {
     const key = h.parsed?.dateKey || toDateKey(h.createdAt ?? Date.now());
@@ -53,7 +53,7 @@ function foldByDate(handoffs) {
  * - 처음 등장한 항목 → firstDate 기록
  * v3로 파싱된 보고만 사용한다. 구양식 보고를 섞으면 전량 '해결'로 오판된다.
  */
-function trackOpenItems(reports, pick) {
+export function trackOpenItems(reports, pick) {
   const open = new Map();
   for (const { dateKey, handoff } of reports) {
     if (handoff.parsed?.formatVersion !== 'v3') continue;

@@ -36,6 +36,9 @@ export default function Layout() {
           <NavLink to="/" end className="nav-item">
             종합 대시보드
           </NavLink>
+          <NavLink to="/stock" end className="nav-item">
+            재고 현황
+          </NavLink>
           <div className="nav-section-title">지점 목록</div>
           {STORES.map((store) => (
             <NavLink
