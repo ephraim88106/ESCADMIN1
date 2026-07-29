@@ -1,210 +1,224 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { STORES } from '../data/stores';
+import { useAllHandoffs, useNotices } from '../hooks/useFirestore';
+import { buildPatrolList, summarize, todayKey, THRESHOLDS } from '../lib/patrol';
+import PasteBox from '../components/PasteBox';
 
-function getLocalData(key) {
-  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
-  catch { return []; }
-}
+const REASON_CLASS = {
+  missing: 'reason-missing',
+  stale: 'reason-stale',
+  open: 'reason-open',
+  order: 'reason-order',
+  temp: 'reason-temp',
+};
 
-// 온도체크 섹션에서 평균 온도 추출
-function extractAvgTemp(handoffs) {
-  const temps = [];
-  // 최근 7일 이내 인수인계만 사용
-  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  for (const h of handoffs) {
-    if (h.createdAt < cutoff) continue;
-    const tempSection = h.sections?.find((s) => s.label === '온도체크');
-    if (!tempSection) continue;
-    const lines = tempSection.content.split('\n');
-    for (const line of lines) {
-      // 소수점 있는 온도값 (예: 24.9, 22.7)
-      const decimalMatches = line.match(/\b(\d{1,2}\.\d+)\b/g);
-      if (decimalMatches) {
-        for (const m of decimalMatches) {
-          const n = parseFloat(m);
-          if (n >= 15 && n <= 40) temps.push(n);
-        }
-      }
-      // 콜론 뒤 정수 온도 (예: "44: 25", "28 : 25")
-      const colonMatch = line.match(/:\s*(\d{2})\b/g);
-      if (colonMatch) {
-        for (const m of colonMatch) {
-          const n = parseInt(m.replace(/.*:\s*/, ''));
-          if (n >= 15 && n <= 35) temps.push(n);
-        }
-      }
-    }
-  }
-  if (temps.length === 0) return null;
-  return (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+function AgeTag({ age }) {
+  const cls = age >= THRESHOLDS.staleDays ? 'age-tag stale' : 'age-tag';
+  return <span className={cls}>{age}일</span>;
 }
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [storeSummary, setStoreSummary] = useState(
-    STORES.map((s) => ({ ...s, noticeCount: 0, uncheckedNotices: 0, handoffPending: false }))
+  const { byStore, loading, upsertHandoff, findSameDay } = useAllHandoffs();
+  const { notices } = useNotices();
+  const [showPaste, setShowPaste] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [showAll, setShowAll] = useState(false);
+
+  const today = todayKey();
+  const patrol = useMemo(
+    () => buildPatrolList(STORES, byStore, today),
+    [byStore, today]
   );
-  const [totals, setTotals] = useState({ notices: 0, unchecked: 0, pendingHandoffs: 0 });
-  const [loading, setLoading] = useState(true);
-  const [selectedStore, setSelectedStore] = useState(null);
+  const stats = useMemo(() => summarize(patrol), [patrol]);
 
-  useEffect(() => {
-    const allNotices = getLocalData('notices_global');
+  const uncheckedNotices = useMemo(
+    () =>
+      notices.reduce((acc, n) => {
+        const targets = n.targetStores || [];
+        const checked = n.checkedStores || [];
+        return acc + targets.filter((t) => !checked.includes(t)).length;
+      }, 0),
+    [notices]
+  );
 
-    const summary = STORES.map((store) => {
-      const storeNotices = allNotices.filter((n) =>
-        n.targetStores?.includes(store.id)
-      );
-      const unchecked = storeNotices.filter(
-        (n) => !(n.checkedStores || []).includes(store.id)
-      ).length;
+  // 정상 매장은 접어둔다. 17개를 다 보려 하면 관리가 무너진다.
+  const needsAttention = patrol.filter((s) => !s.isClear);
+  const clear = patrol.filter((s) => s.isClear);
+  const visible = showAll ? patrol : needsAttention;
 
-      const handoffs = getLocalData(`handoffs_${store.id}`);
-      const pendingHandoffs = handoffs.filter((h) => !h.checkedBy);
-      const pendingCount = pendingHandoffs.length;
-
-      const orders = getLocalData(`orders_${store.id}`);
-      const pendingOrders = orders.filter((o) => o.status === 'pending');
-
-      const avgTemp = extractAvgTemp(handoffs);
-
-      return {
-        ...store,
-        noticeCount: storeNotices.length,
-        uncheckedNotices: unchecked,
-        handoffPending: pendingCount > 0,
-        handoffPendingCount: pendingCount,
-        pendingOrders,
-        avgTemp,
-      };
-    });
-
-    const totalUnchecked = summary.reduce((a, b) => a + b.uncheckedNotices, 0);
-    const totalPending = summary.reduce((a, b) => a + b.handoffPendingCount, 0);
-
-    setStoreSummary(summary);
-    setTotals({
-      notices: allNotices.length,
-      unchecked: totalUnchecked,
-      pendingHandoffs: totalPending,
-    });
-    setLoading(false);
-  }, []);
-
-  const handleStoreClick = (store) => {
-    setSelectedStore(store);
-  };
-
-  const closeModal = () => setSelectedStore(null);
-
-  const goToStore = (path) => {
-    closeModal();
-    navigate(path);
-  };
+  const selectedStatus = selected
+    ? patrol.find((s) => s.store.id === selected) || null
+    : null;
 
   return (
     <div className="dashboard">
-      <h2>종합 대시보드</h2>
+      <div className="page-header">
+        <h2>종합 대시보드</h2>
+        <button className="btn-primary" onClick={() => setShowPaste((v) => !v)}>
+          {showPaste ? '닫기' : '📋 문자 붙여넣기'}
+        </button>
+      </div>
+
+      {showPaste && (
+        <PasteBox upsertHandoff={upsertHandoff} findSameDay={findSameDay} />
+      )}
 
       <div className="summary-cards">
         <div className="summary-card">
-          <div className="summary-label">전체 지점</div>
-          <div className="summary-value">{STORES.length}개</div>
+          <div className="summary-label">오늘 보고</div>
+          <div className={`summary-value${stats.missing > 0 ? ' text-danger' : ''}`}>
+            {loading ? '...' : `${stats.submitted}/${stats.total}`}
+          </div>
+        </div>
+        <div className="summary-card">
+          <div className="summary-label">{THRESHOLDS.staleDays}일↑ 방치</div>
+          <div className={`summary-value${stats.staleTotal > 0 ? ' text-danger' : ''}`}>
+            {loading ? '...' : `${stats.staleTotal}건`}
+          </div>
+        </div>
+        <div className="summary-card">
+          <div className="summary-label">전체 미해결</div>
+          <div className={`summary-value${stats.openTotal > 0 ? ' text-warn' : ''}`}>
+            {loading ? '...' : `${stats.openTotal}건`}
+          </div>
+        </div>
+        <div className="summary-card">
+          <div className="summary-label">발주 미도착</div>
+          <div className={`summary-value${stats.orderOverdue > 0 ? ' text-warn' : ''}`}>
+            {loading ? '...' : `${stats.orderOverdue}건`}
+          </div>
         </div>
         <div className="summary-card">
           <div className="summary-label">미확인 공지</div>
-          <div className={`summary-value${totals.unchecked > 0 ? ' text-danger' : ''}`}>
-            {loading ? '...' : `${totals.unchecked}건`}
-          </div>
-        </div>
-        <div className="summary-card">
-          <div className="summary-label">인수인계 대기</div>
-          <div className={`summary-value${totals.pendingHandoffs > 0 ? ' text-warn' : ''}`}>
-            {loading ? '...' : `${totals.pendingHandoffs}건`}
+          <div className={`summary-value${uncheckedNotices > 0 ? ' text-warn' : ''}`}>
+            {uncheckedNotices}건
           </div>
         </div>
       </div>
 
-      <h3>지점별 현황</h3>
-      <div className="store-grid">
-        {storeSummary.map((store) => (
-          <div
-            key={store.id}
-            className={`store-card store-card-clickable${store.uncheckedNotices > 0 || store.handoffPending ? ' store-card-alert' : ''}`}
-            onClick={() => handleStoreClick(store)}
-          >
-            <div className="store-card-name">{store.name}</div>
-            <div className="store-card-stats">
-              {store.uncheckedNotices > 0 && (
-                <span className="stat-badge stat-danger">공지 {store.uncheckedNotices}</span>
-              )}
-              {store.handoffPending && (
-                <span className="stat-badge stat-warn">인수인계 {store.handoffPendingCount}</span>
-              )}
-              {store.pendingOrders?.length > 0 && (
-                <span className="stat-badge stat-order">주문 {store.pendingOrders.length}</span>
-              )}
-              {store.uncheckedNotices === 0 && !store.handoffPending && store.pendingOrders?.length === 0 && (
-                <span className="stat-ok">✓ 확인 완료</span>
-              )}
-            </div>
-            {store.avgTemp && (
-              <div className="store-card-temp">
-                🌡️ 평균 {store.avgTemp}°C
+      <div className="patrol-header">
+        <h3>오늘의 순회 <span className="patrol-sub">위험한 순서</span></h3>
+        <button className="btn-sm btn-secondary" onClick={() => setShowAll((v) => !v)}>
+          {showAll ? '이상 있는 곳만' : `전체 보기 (${patrol.length})`}
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="loading">불러오는 중...</p>
+      ) : visible.length === 0 ? (
+        <p className="empty-state">
+          이상 있는 매장이 없습니다. 17개 전부 오늘 보고가 들어왔고 미해결 항목도 없습니다.
+        </p>
+      ) : (
+        <ol className="patrol-list">
+          {visible.map((s, idx) => (
+            <li
+              key={s.store.id}
+              className={`patrol-item${s.submittedToday ? '' : ' patrol-missing'}${s.isClear ? ' patrol-clear' : ''}`}
+              onClick={() => setSelected(s.store.id)}
+            >
+              <span className="patrol-rank">{idx + 1}</span>
+              <div className="patrol-body">
+                <div className="patrol-name">
+                  {s.store.name}
+                  {s.maxAge > 0 && <AgeTag age={s.maxAge} />}
+                </div>
+                <div className="patrol-reasons">
+                  {s.reasons.length === 0 ? (
+                    <span className="reason-chip reason-ok">이상 없음</span>
+                  ) : (
+                    s.reasons.map((r, i) => (
+                      <span key={i} className={`reason-chip ${REASON_CLASS[r.kind] || ''}`}>
+                        {r.text}
+                      </span>
+                    ))
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+              <span className="patrol-arrow">›</span>
+            </li>
+          ))}
+        </ol>
+      )}
 
-      {/* 매장 상세 모달 */}
-      {selectedStore && (
-        <div className="modal-overlay" onClick={closeModal}>
+      {!showAll && clear.length > 0 && (
+        <p className="patrol-footnote">
+          나머지 {clear.length}개 매장은 오늘 보고 완료 · 미해결 없음
+        </p>
+      )}
+
+      {selectedStatus && (
+        <div className="modal-overlay" onClick={() => setSelected(null)}>
           <div className="modal store-modal" onClick={(e) => e.stopPropagation()}>
             <div className="store-modal-header">
-              <h3>{selectedStore.name}</h3>
-              {selectedStore.avgTemp && (
-                <span className="store-modal-temp">🌡️ 평균 {selectedStore.avgTemp}°C</span>
-              )}
+              <h3>{selectedStatus.store.name}</h3>
+              <span className="store-modal-temp">
+                {selectedStatus.lastDateKey
+                  ? `최근 보고 ${selectedStatus.lastDateKey}`
+                  : '보고 기록 없음'}
+              </span>
             </div>
 
-            <div className="store-modal-section">
-              <div className="store-modal-label">📦 주문 필요 목록</div>
-              {selectedStore.pendingOrders?.length > 0 ? (
+            <DetailSection
+              title="🔧 미해결 고장"
+              items={selectedStatus.faults}
+              empty="없음"
+            />
+            <DetailSection
+              title="🗒️ 미해결 해야할일"
+              items={selectedStatus.todos}
+              empty="없음"
+            />
+            <DetailSection
+              title="📦 미도착 발주"
+              items={selectedStatus.orderOverdue}
+              empty="없음"
+            />
+
+            {selectedStatus.tempFlags.length > 0 && (
+              <div className="store-modal-section">
+                <div className="store-modal-label">🌡️ 온습도 이탈</div>
                 <ul className="order-quick-list">
-                  {selectedStore.pendingOrders.map((o) => (
-                    <li key={o.id} className="order-quick-item">
-                      <span>{o.item}</span>
-                      <span className="order-quick-meta">{o.author}</span>
-                    </li>
+                  {selectedStatus.tempFlags.map((t, i) => (
+                    <li key={i} className="order-quick-item">{t}</li>
                   ))}
                 </ul>
-              ) : (
-                <p className="store-modal-empty">주문 대기 항목이 없습니다.</p>
-              )}
-            </div>
-
-            <div className="store-modal-badges">
-              {selectedStore.uncheckedNotices > 0 && (
-                <span className="stat-badge stat-danger">미확인 공지 {selectedStore.uncheckedNotices}건</span>
-              )}
-              {selectedStore.handoffPending && (
-                <span className="stat-badge stat-warn">인수인계 대기 {selectedStore.handoffPendingCount}건</span>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="modal-actions store-modal-actions">
-              <button className="btn-secondary" onClick={closeModal}>닫기</button>
-              <button className="btn-secondary" onClick={() => goToStore(`/store/${selectedStore.id}/board/orders`)}>
-                주문내역
-              </button>
-              <button className="btn-primary" onClick={() => goToStore(`/store/${selectedStore.id}/tasks`)}>
-                매장 바로가기
+              <button className="btn-secondary" onClick={() => setSelected(null)}>닫기</button>
+              <button
+                className="btn-primary"
+                onClick={() => navigate(`/store/${selectedStatus.store.id}/board/handoff`)}
+              >
+                인수인계 보기
               </button>
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function DetailSection({ title, items, empty }) {
+  return (
+    <div className="store-modal-section">
+      <div className="store-modal-label">{title}</div>
+      {items.length === 0 ? (
+        <p className="store-modal-empty">{empty}</p>
+      ) : (
+        <ul className="order-quick-list">
+          {items.map((it, i) => (
+            <li key={i} className="order-quick-item">
+              <span>{it.text}</span>
+              <AgeTag age={it.age} />
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

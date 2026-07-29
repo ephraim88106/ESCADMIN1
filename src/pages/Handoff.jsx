@@ -2,208 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getStoreById, detectStoreFromText } from '../data/stores';
 import { useHandoffs, useNotices, useInventory, useOrders } from '../hooks/useFirestore';
-
-// ===== 자동 파서 =====
-function parseMessage(text) {
-  const result = {
-    고정석: [],
-    특이사항: [],
-    온도: [],
-    빈자리: [],
-    주문: [],
-    도착: [],
-    전달: [],
-  };
-
-  const lines = text.split('\n');
-  let mode = null; // 현재 섹션 모드
-  let tempZone = ''; // 온도 구역 (스터디, 카페존 등)
-
-  for (let raw of lines) {
-    const line = raw.trim();
-    if (!line) { mode = mode; continue; } // 빈줄은 모드 유지
-
-    // --- 매장명 헤더 (스킵) ---
-    if (/^[■●▣]/.test(line) || /^\[.+점\]$/.test(line) || /^.+점\s*$/.test(line) && lines.indexOf(raw) === 0) {
-      // 청소 일정 추출
-      const cleanMatch = line.match(/\(([^)]*청소[^)]*)\)/);
-      if (cleanMatch) {
-        result.전달.push('청소 일정: ' + cleanMatch[1]);
-      }
-      // 매장 헤더의 부가정보 (비번 등)
-      const extraMatch = line.match(/\(사무실[^)]+\)/);
-      if (extraMatch) {
-        result.전달.push(extraMatch[0]);
-      }
-      mode = null;
-      tempZone = '';
-      continue;
-    }
-
-    // --- 고정석/지정석 ---
-    if (/고정석|지정석/.test(line)) {
-      const seats = line.replace(/.*(?:고정석|지정석)[:\s]*/i, '').replace(/[\[\]()]/g, '').trim();
-      if (seats) result.고정석.push(seats);
-      // 같은 줄에 부가정보가 있으면 (물풀 등)
-      mode = null;
-      continue;
-    }
-    if (/^ㄴ\s*지정석/.test(line)) {
-      const seats = line.replace(/ㄴ\s*지정석[:\s]*/i, '').trim();
-      if (seats) result.고정석.push(seats);
-      mode = null;
-      continue;
-    }
-    // 매장 헤더 바로 다음 (숫자만 있는 괄호) - 고정석일 가능성
-    if (/^\(\d[\d\s,]+\)$/.test(line) && result.고정석.length === 0 && result.온도.length === 0) {
-      result.고정석.push(line.replace(/[()]/g, '').trim());
-      mode = null;
-      continue;
-    }
-
-    // --- 특이사항 (▶, ★, ☆, *, 고장, 안꺼짐, 오류, 교체, 금지 등) ---
-    if (/^[▶★☆*]/.test(line)) {
-      result.특이사항.push(line.replace(/^[▶★☆*]\s*/, ''));
-      mode = null;
-      continue;
-    }
-    if (/고장|안꺼짐|안켜짐|오류|교체\s*필요|초기화\s*금지|떨어진|더러움|악취|청소\s*完/.test(line) && !isTemperature(line)) {
-      result.특이사항.push(line.replace(/^[ㄴ]\s*/, ''));
-      mode = null;
-      continue;
-    }
-
-    // --- 빈자리/빈좌석 섹션 ---
-    if (/^[ㄴ]?\s*빈\s?(자리|좌석)/i.test(line)) {
-      mode = 'empty';
-      continue;
-    }
-    if (mode === 'empty') {
-      result.빈자리.push(line);
-      mode = null;
-      continue;
-    }
-
-    // --- 주문/이전 주문 섹션 ---
-    if (/^이전\s*주문$|^주문$/i.test(line)) {
-      mode = 'order';
-      continue;
-    }
-    if (mode === 'order') {
-      if (isSectionHeader(line)) {
-        mode = null;
-        // fall through to process this line
-      } else {
-        result.주문.push(line);
-        continue;
-      }
-    }
-
-    // --- 도착 섹션 ---
-    if (/^도착$/i.test(line)) {
-      mode = 'arrive';
-      continue;
-    }
-    if (mode === 'arrive') {
-      if (isSectionHeader(line)) {
-        mode = null;
-        // fall through
-      } else {
-        result.도착.push(line);
-        continue;
-      }
-    }
-
-    // --- 온도 구역 헤더 ---
-    if (/^스터디/i.test(line)) {
-      tempZone = '스터디';
-      mode = 'temp';
-      continue;
-    }
-    if (/^카페(존|테리아)?$|^카페$/i.test(line) || /^\s*카페존/.test(line)) {
-      tempZone = '카페존';
-      mode = 'temp';
-      continue;
-    }
-
-    // --- 온도 데이터 ---
-    if (isTemperature(line)) {
-      const prefix = tempZone ? `[${tempZone}] ` : '';
-      result.온도.push(prefix + line.replace(/^[ㄴ]\s*/, ''));
-      mode = 'temp';
-      continue;
-    }
-
-    // --- 냉난방기 등 설비 확인 (온도 섹션 내) ---
-    if (mode === 'temp' && /냉난방|가동/.test(line)) {
-      result.온도.push(line.replace(/[\[\]]/g, ''));
-      continue;
-    }
-
-    // --- 나머지 → 전달사항 ---
-    if (line.length > 0) {
-      // 물풀 관련 부가정보
-      if (/^\[물풀|^\[공용/.test(line)) {
-        result.전달.push(line.replace(/[\[\]]/g, ''));
-      } else {
-        result.전달.push(line);
-      }
-      mode = null;
-    }
-  }
-
-  // 섹션 배열을 결과로 변환
-  const sections = [];
-  if (result.고정석.length > 0) {
-    sections.push({ label: '고정석', content: result.고정석.join('\n'), checked: false });
-  }
-  if (result.특이사항.length > 0) {
-    sections.push({ label: '특이사항', content: result.특이사항.join('\n'), checked: false });
-  }
-  if (result.온도.length > 0) {
-    sections.push({ label: '온도체크', content: result.온도.join('\n'), checked: false });
-  }
-  if (result.빈자리.length > 0) {
-    sections.push({ label: '빈자리', content: result.빈자리.join('\n'), checked: false });
-  }
-  if (result.주문.length > 0) {
-    const content = result.주문.join('\n');
-    sections.push({ label: '주문/발주', content, checked: false });
-  }
-  if (result.도착.length > 0) {
-    sections.push({ label: '도착', content: result.도착.join('\n'), checked: false });
-  }
-  if (result.전달.length > 0) {
-    sections.push({ label: '전달사항', content: result.전달.join('\n'), checked: false });
-  }
-
-  return sections;
-}
-
-// 온도 데이터인지 판별
-function isTemperature(line) {
-  const cleaned = line.replace(/^[ㄴ]\s*/, '').trim();
-  // "28 : 24.9" / "05 : 23.1" 패턴
-  if (/^\d+\s*:\s*\d+/.test(cleaned)) return true;
-  // "(11번) 22.7" / "(35번): 24.8 / 32%" 패턴
-  if (/^\(?\d+번\)?\s*[:)]\s*\d+/.test(cleaned)) return true;
-  // "78자리 25.2" / "08자리 25" 패턴
-  if (/\d+\s*자리\s+\d+/.test(cleaned)) return true;
-  // "44: 25" / "55: 24.5" 패턴
-  if (/^\d+\s*:\s*\d+/.test(cleaned)) return true;
-  // "카페테리아 23.4" / "담요위 24.2" / "휴게실 23.0" 등 장소 + 온도
-  if (/(?:카페테리아|담요|휴게실|냉장고|스터디룸|창가|신발장|자리|번\s).*\d{2,}/.test(cleaned)) return true;
-  // "24번 23.8 / 71%" 패턴
-  if (/^\d+번\s+\d{2}/.test(cleaned)) return true;
-  // "(21번) 25" 패턴
-  if (/^\(\d+번\)\s*\d+/.test(cleaned)) return true;
-  return false;
-}
-
-// 다른 섹션 헤더인지 확인
-function isSectionHeader(line) {
-  return /^[ㄴ]?\s*빈\s?(자리|좌석)|^도착$|^주문$|^이전\s*주문$|^스터디|^카페/i.test(line);
-}
+import { parseHandoffText, LABEL_ICONS } from '../lib/parseHandoff';
 
 // 중복 텍스트 감지: 일치하는 기존 인수인계 반환 (없으면 null)
 function findDuplicate(newText, existingHandoffs) {
@@ -248,15 +47,6 @@ function formatTime(ts) {
   return `${month}/${day} ${h}:${m}`;
 }
 
-const LABEL_ICONS = {
-  '고정석': '💺',
-  '특이사항': '⚠️',
-  '온도체크': '🌡️',
-  '빈자리': '🪑',
-  '주문/발주': '📦',
-  '도착': '🚚',
-  '전달사항': '📝',
-};
 
 export default function Handoff() {
   const { storeId } = useParams();
@@ -305,29 +95,30 @@ export default function Handoff() {
 
   const handleParse = () => {
     if (!rawText.trim()) return;
-    setPreview(parseMessage(rawText));
+    setPreview(parseHandoffText(rawText).sections);
   };
 
-  const targetStore = detectedStore || store;
   const isOtherStore = detectedStore && detectedStore.id !== storeId;
 
   const handleSubmit = async () => {
     if (!rawText.trim()) return;
-    const sections = preview || parseMessage(rawText);
+    const { parsed, sections, formatVersion } = parseHandoffText(rawText);
     if (sections.length === 0) return;
     const targetId = isOtherStore ? detectedStore.id : undefined;
     await addHandoff({
       author: author.trim() || '미입력',
       rawText,
       sections,
+      parsed,
+      formatVersion,
       images,
       checkedBy: null,
       checkedAt: null,
       duplicateOfDate: findDuplicate(rawText, handoffs)?.createdAt ?? null,
     }, targetId);
 
-    // 주문/발주 섹션이 있으면 주문내역에 자동 등록
-    const orderSections = sections.filter((s) => s.label === '주문/발주');
+    // 주문 섹션이 있으면 주문내역에 자동 등록
+    const orderSections = sections.filter((s) => s.label === '주문/발주' || s.label === '주문');
     for (const sec of orderSections) {
       const lines = sec.content.split('\n').filter((l) => l.trim());
       for (const line of lines) {
@@ -394,6 +185,19 @@ export default function Handoff() {
     await updateHandoff(handoff.id, { sections: newSections });
   };
 
+  // `롤휴지 4 (이전요청)` → { name: '롤휴지', qty: 4 }
+  const splitItemLine = (line) => {
+    const body = line.replace(/\(\s*이전\s*요청\s*\)/, '').trim();
+    const m = body.match(/^(.*?)\s+(\d+(?:\.\d+)?)\s*\S*$/);
+    if (!m) return { name: body, qty: 1 };
+    return { name: m[1].trim() || body, qty: parseFloat(m[2]) };
+  };
+
+  /**
+   * ■주문 체크 = '발주함' 표시일 뿐 재고는 변하지 않는다.
+   * 재고가 늘어나는 시점은 물건이 실제로 도착한 ■입고 뿐이다.
+   * (이전에는 주문 체크가 재고를 +1 해서 안 온 물건이 재고로 잡혔다)
+   */
   const handleOrderLineCheck = async (handoff, sectionIdx, lineIdx) => {
     const sec = handoff.sections[sectionIdx];
     const lines = sec.content.split('\n').filter((l) => l.trim());
@@ -407,25 +211,18 @@ export default function Handoff() {
     );
     await updateHandoff(handoff.id, { sections: newSections });
 
-    // 체크 시 재고 + 주문내역에 추가
-    if (!wasChecked) {
-      const lineName = lines[lineIdx].trim();
-      // 품명 추출 (숫자/수량 제거)
-      const itemName = lineName
-        .replace(/\d+\s*(박스|팩|개|봉|묶음|세트|병|캔|롤|ea|EA|장)/g, '')
-        .replace(/[xX×]\s*\d+/g, '')
-        .replace(/\s+/g, ' ')
-        .trim() || lineName;
+    const isArrival = sec.label === '입고' || sec.label === '도착';
+    if (!isArrival) return;
 
-      const existing = inventoryItems.find(
-        (item) => item.name === itemName || item.name === lineName
-      );
-      if (existing) {
-        await updateInventoryItem(existing.id, { stock: (existing.stock ?? 0) + 1 });
-      } else {
-        await addInventoryItem({ name: itemName, stock: 1, opened: 0 });
-      }
-
+    const { name, qty } = splitItemLine(lines[lineIdx]);
+    const delta = wasChecked ? -qty : qty;
+    const existing = inventoryItems.find((item) => item.name === name);
+    if (existing) {
+      await updateInventoryItem(existing.id, {
+        stock: Math.max(0, (existing.stock ?? 0) + delta),
+      });
+    } else if (delta > 0) {
+      await addInventoryItem({ name, stock: delta, opened: 0 });
     }
   };
 
@@ -475,7 +272,9 @@ export default function Handoff() {
       {handoff.sections.map((sec, i) => {
         const urgent = /#긴급|#급/.test(sec.content);
         const icon = LABEL_ICONS[sec.label] || '📋';
-        const isItemSection = sec.label === '주문/발주' || sec.label === '도착';
+        const ITEM_LABELS = ['주문/발주', '주문', '도착', '입고'];
+        const isItemSection = ITEM_LABELS.includes(sec.label);
+        const isArrivalSection = sec.label === '도착' || sec.label === '입고';
         const orderLines = isItemSection ? sec.content.split('\n').filter((l) => l.trim()) : [];
         const orderChecks = sec.orderChecks || orderLines.map(() => false);
 
@@ -500,7 +299,9 @@ export default function Handoff() {
                   {!isItemSection && sec.checked ? '✓ ' : ''}{icon} {sec.label}
                   {urgent && <span className="urgent-tag">#긴급</span>}
                   {isItemSection && editable && (
-                    <span className="order-check-hint"> — 체크 시 재고에 추가됩니다</span>
+                    <span className="order-check-hint">
+                      {isArrivalSection ? ' — 체크 시 재고에 반영됩니다' : ' — 체크 = 발주함 (재고는 변하지 않습니다)'}
+                    </span>
                   )}
                 </span>
               )}
@@ -524,7 +325,11 @@ export default function Handoff() {
                         <span className="order-line-icon">{checked ? '✓' : '○'}</span>
                       )}
                       <span className={checked ? 'line-through' : ''}>{line.trim()}</span>
-                      {checked && <span className="order-added-tag">재고 추가됨</span>}
+                      {checked && (
+                        <span className="order-added-tag">
+                          {isArrivalSection ? '재고 반영됨' : '발주함'}
+                        </span>
+                      )}
                     </label>
                   );
                 })}

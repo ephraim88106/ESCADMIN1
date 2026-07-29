@@ -10,6 +10,7 @@ import {
   doc,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
+import { STORES } from '../data/stores';
 
 // localStorage 기반 폴백 (Firebase 미설정 시)
 function getLocalData(key) {
@@ -226,6 +227,99 @@ export function useHandoffs(storeId) {
   };
 
   return { handoffs, loading, addHandoff, updateHandoff, removeHandoff };
+}
+
+/**
+ * 전 매장 보고를 한 번에 구독한다. 대시보드('오늘의 순회')용.
+ * 기존 useHandoffs 는 매장 하나만 보므로 17개를 나란히 세울 수 없었다.
+ */
+export function useAllHandoffs() {
+  const [byStore, setByStore] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  const refreshLocal = useCallback(() => {
+    const map = {};
+    for (const store of STORES) {
+      const list = getLocalData(`handoffs_${store.id}`);
+      list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+      map[store.id] = list;
+    }
+    setByStore(map);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) {
+      refreshLocal();
+      return;
+    }
+    const unsub = onSnapshot(collection(db, 'handoffs'), (snapshot) => {
+      const map = {};
+      for (const store of STORES) map[store.id] = [];
+      snapshot.docs.forEach((d) => {
+        const item = { id: d.id, ...d.data() };
+        if (!map[item.storeId]) map[item.storeId] = [];
+        map[item.storeId].push(item);
+      });
+      for (const key of Object.keys(map)) {
+        map[key].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+      }
+      setByStore(map);
+      setLoading(false);
+    });
+    return unsub;
+  }, [refreshLocal]);
+
+  /**
+   * 같은 매장·같은 날짜 보고가 이미 있으면 덮어쓴다(v3 결정사항).
+   * @returns {'created'|'updated'}
+   */
+  const upsertHandoff = async (storeId, data) => {
+    const dateKey = data.parsed?.dateKey ?? null;
+    const existing = dateKey
+      ? (byStore[storeId] || []).find((h) => h.parsed?.dateKey === dateKey)
+      : null;
+
+    if (isFirebaseConfigured) {
+      if (existing) {
+        await updateDoc(doc(db, 'handoffs', existing.id), {
+          ...data,
+          storeId,
+          updatedAt: Date.now(),
+        });
+        return 'updated';
+      }
+      await addDoc(collection(db, 'handoffs'), {
+        ...data,
+        storeId,
+        createdAt: Date.now(),
+      });
+      return 'created';
+    }
+
+    const key = `handoffs_${storeId}`;
+    const list = getLocalData(key);
+    if (existing) {
+      const next = list.map((h) =>
+        h.id === existing.id ? { ...h, ...data, storeId, updatedAt: Date.now() } : h
+      );
+      setLocalData(key, next);
+      refreshLocal();
+      return 'updated';
+    }
+    list.push({ id: generateId(), ...data, storeId, createdAt: Date.now() });
+    setLocalData(key, list);
+    refreshLocal();
+    return 'created';
+  };
+
+  /** 같은 매장·같은 날짜 보고가 이미 있는지 확인 (등록 전 경고용) */
+  const findSameDay = (storeId, dateKey) =>
+    dateKey
+      ? (byStore[storeId] || []).find((h) => h.parsed?.dateKey === dateKey) || null
+      : null;
+
+  return { byStore, loading, upsertHandoff, findSameDay };
 }
 
 export function useChecklist(storeId, dateKey) {

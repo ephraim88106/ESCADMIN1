@@ -2004,3 +2004,276 @@ body {
   border-color: #fed7aa !important;
   background: #fffaf5 !important;
 }
+
+/* ============================================================
+   붙여넣기 대시보드 · 오늘의 순회 (v3)
+   ============================================================ */
+
+/* 요약 카드는 항목이 5개로 늘어나 자동 줄바꿈으로 바꾼다 */
+.dashboard .summary-cards {
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+}
+
+/* === 붙여넣기 === */
+.paste-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.paste-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.paste-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.paste-result {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.paste-analysis {
+  margin-top: 12px;
+}
+
+.paste-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.paste-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: var(--text-muted);
+}
+
+.paste-chip.ok {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.paste-chip.warn {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.paste-chip.legacy {
+  background: #fefce8;
+  color: #854d0e;
+}
+
+.paste-preview {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fbfdff;
+}
+
+.paste-preview-item + .paste-preview-item {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.paste-preview-label {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.paste-preview-content {
+  font-family: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-muted);
+}
+
+.paste-submit {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.paste-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* === 오늘의 순회 === */
+.patrol-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.patrol-header h3 {
+  margin: 0;
+}
+
+.patrol-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.patrol-list {
+  list-style: none;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.patrol-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.patrol-item:hover {
+  border-color: var(--primary);
+}
+
+.patrol-item.patrol-missing {
+  border-left-color: var(--danger);
+  background: #fff5f5;
+}
+
+.patrol-item.patrol-clear {
+  border-left-color: #10b981;
+}
+
+.patrol-rank {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.patrol-missing .patrol-rank {
+  background: var(--danger);
+  color: #fff;
+}
+
+.patrol-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.patrol-name {
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.patrol-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.patrol-arrow {
+  color: var(--text-muted);
+  font-size: 20px;
+}
+
+.patrol-footnote {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.reason-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: var(--text-muted);
+}
+
+.reason-chip.reason-missing {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.reason-chip.reason-stale {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.reason-chip.reason-open {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.reason-chip.reason-order {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.reason-chip.reason-temp {
+  background: #cffafe;
+  color: #155e75;
+}
+
+.reason-chip.reason-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.age-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.age-tag.stale {
+  background: var(--danger);
+  color: #fff;
+}
