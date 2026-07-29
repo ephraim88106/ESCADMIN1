@@ -5,6 +5,8 @@
 // 그 탓에 v3 문자를 붙여넣으면 한 줄도 등록되지 않았다.
 // 이제 v3는 parseV3 가 처리하고, 여기서는 대괄호/매장명 헤더만 건너뛴다.
 
+import { detectStoreFromText } from '../data/stores';
+
 export function parseLegacy(text) {
   const result = {
     고정석: [],
@@ -19,16 +21,21 @@ export function parseLegacy(text) {
   const lines = text.split('\n');
   let mode = null;
   let tempZone = '';
+  let seenBody = false;
 
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
 
     // --- 매장명 헤더 (스킵) ---
+    // 첫 줄에 매장명이 있으면 그 줄은 헤더다. `검암점 (월수금 청소)` 처럼
+    // 뒤에 부가정보가 붙어 있어도 인식되어야 한다.
+    const isFirstLine = !seenBody;
+    seenBody = true;
     if (
       /^[●▣]/.test(line) ||
       /^\[.+\]/.test(line) ||
-      (/^.+점\s*$/.test(line) && lines.indexOf(raw) === 0)
+      (isFirstLine && detectStoreFromText(line))
     ) {
       const cleanMatch = line.match(/\(([^)]*청소[^)]*)\)/);
       if (cleanMatch) result.전달.push('청소 일정: ' + cleanMatch[1]);
@@ -45,15 +52,20 @@ export function parseLegacy(text) {
         .replace(/.*(?:고정석|지정석)[:\s]*/i, '')
         .replace(/[[\]()]/g, '')
         .trim();
-      if (seats) result.고정석.push(seats);
-      mode = null;
-      continue;
+      // 좌석 번호가 없으면 좌석 안내가 아니다 (`지정석 표시 붙이기` = 해야할일)
+      if (seats && /\d/.test(seats)) {
+        result.고정석.push(seats);
+        mode = null;
+        continue;
+      }
     }
     if (/^ㄴ\s*지정석/.test(line)) {
       const seats = line.replace(/ㄴ\s*지정석[:\s]*/i, '').trim();
-      if (seats) result.고정석.push(seats);
-      mode = null;
-      continue;
+      if (seats && /\d/.test(seats)) {
+        result.고정석.push(seats);
+        mode = null;
+        continue;
+      }
     }
     if (/^\(\d[\d\s,]+\)$/.test(line) && result.고정석.length === 0 && result.온도.length === 0) {
       result.고정석.push(line.replace(/[()]/g, '').trim());

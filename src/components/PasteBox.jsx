@@ -1,10 +1,14 @@
 import { useMemo, useState } from 'react';
 import { detectStoreFromText } from '../data/stores';
 import { parseHandoffText, LABEL_ICONS } from '../lib/parseHandoff';
+import ConvertForm from './ConvertForm';
 
 /**
  * 카톡 문자 붙여넣기 → 미리보기 → 등록.
  * 휴대폰에서 쓰는 게 기본이라 한 화면에서 끝나도록 구성했다.
+ *
+ * v3 문자면 바로 등록, 구양식이면 v3 변환 폼으로 넘긴다.
+ * 현장이 아직 대부분 구양식이라 변환 경로가 사실상 주 입력 경로다.
  */
 export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
   const [text, setText] = useState('');
@@ -20,7 +24,15 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
     return { store, parsed, sections, formatVersion, sameDay };
   }, [text, findSameDay]);
 
-  const canSubmit = !!analysis?.store && analysis.sections.length > 0 && !saving;
+  const isLegacy = analysis?.formatVersion === 'legacy';
+  const canSubmit =
+    !!analysis?.store && !isLegacy && analysis.sections.length > 0 && !saving;
+
+  const finish = (info) => {
+    setResult(info);
+    setText('');
+    onDone?.();
+  };
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -42,13 +54,11 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
         checkedBy: null,
         checkedAt: null,
       });
-      setResult({
+      finish({
         storeName: analysis.store.name,
-        dateLabel: analysis.parsed?.dateLabel || '',
+        dateText: analysis.parsed?.dateLabel || '',
         mode,
       });
-      setText('');
-      onDone?.();
     } finally {
       setSaving(false);
     }
@@ -63,13 +73,13 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
           setText(e.target.value);
           setResult(null);
         }}
-        placeholder={'카톡 보고 문자를 그대로 붙여넣으세요\n\n[검암점] 7/29(수)\n■고정석\n34, 47, 59\n■고장\n...'}
+        placeholder={'카톡 보고 문자를 그대로 붙여넣으세요.\n통일양식이 아니어도 됩니다 — v3 틀로 옮겨 담아 보여드립니다.'}
         rows={6}
       />
 
       {result && (
         <div className="paste-result">
-          ✅ {result.storeName} {result.dateLabel}{' '}
+          ✅ {result.storeName} {result.dateText}{' '}
           {result.mode === 'updated' ? '덮어썼습니다' : '등록했습니다'}
         </div>
       )}
@@ -80,36 +90,51 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
             {analysis.store ? (
               <span className="paste-chip ok">📍 {analysis.store.name}</span>
             ) : (
-              <span className="paste-chip warn">매장을 못 찾았습니다 — 첫 줄에 매장명을 넣어주세요</span>
+              <span className="paste-chip warn">매장을 못 찾았습니다 — 아래에서 골라주세요</span>
             )}
             {analysis.parsed?.dateLabel && (
               <span className="paste-chip">🗓 {analysis.parsed.dateLabel}</span>
             )}
-            <span className={`paste-chip${analysis.formatVersion === 'v3' ? ' ok' : ' legacy'}`}>
-              {analysis.formatVersion === 'v3' ? 'v3 양식' : '구양식 (폴백)'}
+            <span className={`paste-chip${isLegacy ? ' legacy' : ' ok'}`}>
+              {isLegacy ? '구양식 → 변환 필요' : 'v3 양식'}
             </span>
             {analysis.sameDay && (
               <span className="paste-chip warn">같은 날 보고 있음 — 덮어쓰기</span>
             )}
           </div>
 
-          <div className="paste-preview">
-            {analysis.sections.map((sec, i) => (
-              <div key={i} className="paste-preview-item">
-                <div className="paste-preview-label">
-                  {LABEL_ICONS[sec.label] || '📋'} {sec.label}
-                </div>
-                <pre className="paste-preview-content">{sec.content}</pre>
+          {isLegacy ? (
+            <ConvertForm
+              rawText={text}
+              upsertHandoff={upsertHandoff}
+              findSameDay={findSameDay}
+              onDone={finish}
+            />
+          ) : (
+            <>
+              <div className="paste-preview">
+                {analysis.sections.map((sec, i) => (
+                  <div key={i} className="paste-preview-item">
+                    <div className="paste-preview-label">
+                      {LABEL_ICONS[sec.label] || '📋'} {sec.label}
+                    </div>
+                    <pre className="paste-preview-content">{sec.content}</pre>
+                  </div>
+                ))}
+                {analysis.sections.length === 0 && (
+                  <p className="empty-state">인식된 내용이 없습니다.</p>
+                )}
               </div>
-            ))}
-            {analysis.sections.length === 0 && (
-              <p className="empty-state">인식된 내용이 없습니다.</p>
-            )}
-          </div>
 
-          <button className="btn-primary paste-submit" disabled={!canSubmit} onClick={handleSubmit}>
-            {saving ? '등록 중...' : analysis.sameDay ? '덮어쓰기' : '등록'}
-          </button>
+              <button
+                className="btn-primary paste-submit"
+                disabled={!canSubmit}
+                onClick={handleSubmit}
+              >
+                {saving ? '등록 중...' : analysis.sameDay ? '덮어쓰기' : '등록'}
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
