@@ -124,6 +124,43 @@ export function buildStockView(stores, handoffsByStore, items, aliasMap, today =
   return { items: rows, reorder, rawNames: [...rawNames], storeInfo };
 }
 
+/**
+ * 한 매장에서 '지금 시켜야 할 것'을 추린다.
+ *
+ * 미도착 발주(이미 시켰는데 안 온 것)와는 다르다.
+ * 여기 나오는 건 재고가 임계치 미만인데 아직 주문 줄에 없는 품목이다.
+ */
+export function buildStoreReorder(handoffs, aliasMap, today = todayKey()) {
+  const info = buildStoreStock(handoffs, aliasMap, today);
+  const needOrder = [];
+
+  for (const [name, entry] of info.stock) {
+    const threshold = itemThreshold(name, aliasMap, DEFAULT_THRESHOLD);
+    if (entry.qty >= threshold) continue;
+    // 이미 주문한 품목은 '미도착 발주' 쪽에서 다룬다
+    if (info.pendingOrders.some((o) => o.name === name)) continue;
+    needOrder.push({ name, qty: entry.qty, unit: entry.unit, threshold });
+  }
+
+  needOrder.sort((a, b) => a.qty - b.qty || a.name.localeCompare(b.name));
+  return { ...info, needOrder };
+}
+
+/** 한 매장 발주 목록을 카톡·메모로 옮길 수 있는 텍스트로 */
+export function storeReorderToText(storeName, needOrder, pending) {
+  const lines = [`[${storeName}] 발주 요청`];
+  if (needOrder.length === 0 && pending.length === 0) return `${lines[0]}\n발주할 항목이 없습니다.`;
+  if (needOrder.length) {
+    lines.push('', '■주문 필요');
+    for (const n of needOrder) lines.push(`${n.name} — 남은 수량 ${n.qty}${n.unit} (임계 ${n.threshold})`);
+  }
+  if (pending.length) {
+    lines.push('', '■이미 발주함 (미도착)');
+    for (const p of pending) lines.push(`${p.name} — ${p.age <= 0 ? '오늘 요청' : `${p.age}일째 대기`}`);
+  }
+  return lines.join('\n');
+}
+
 /** 발주 목록을 카톡/메모로 옮길 수 있는 텍스트로 */
 export function waitLabel(age) {
   return age <= 0 ? '발주함 (오늘)' : `발주함 ${age}일째`;

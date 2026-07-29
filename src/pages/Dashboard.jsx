@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { STORES } from '../data/stores';
-import { useAllHandoffs, useNotices } from '../hooks/useFirestore';
+import { useAllHandoffs, useNotices, useItems } from '../hooks/useFirestore';
 import { buildPatrolList, summarize, todayKey, THRESHOLDS } from '../lib/patrol';
+import { buildStoreReorder, storeReorderToText, waitLabel } from '../lib/stock';
+import { buildAliasMap } from '../lib/itemName';
 import PasteBox from '../components/PasteBox';
 
 const REASON_CLASS = {
@@ -22,6 +24,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { byStore, loading, upsertHandoff, findSameDay } = useAllHandoffs();
   const { notices } = useNotices();
+  const { items: master } = useItems();
   const [showPaste, setShowPaste] = useState(false);
   const [selected, setSelected] = useState(null);
   const [showAll, setShowAll] = useState(false);
@@ -51,6 +54,24 @@ export default function Dashboard() {
   const selectedStatus = selected
     ? patrol.find((s) => s.store.id === selected) || null
     : null;
+
+  const aliasMap = useMemo(() => buildAliasMap(master), [master]);
+  // '지금 시켜야 할 것'은 미도착 발주와 다르다. 재고가 임계치 미만인데 아직 안 시킨 품목.
+  const selectedStock = useMemo(
+    () => (selected ? buildStoreReorder(byStore[selected] || [], aliasMap, today) : null),
+    [selected, byStore, aliasMap, today]
+  );
+
+  const handleCopyReorder = () => {
+    if (!selectedStatus || !selectedStock) return;
+    const text = storeReorderToText(
+      selectedStatus.store.name,
+      selectedStock.needOrder,
+      selectedStock.pendingOrders
+    );
+    navigator.clipboard?.writeText(text).catch(() => {});
+    window.alert('발주 목록을 복사했습니다.');
+  };
 
   return (
     <div className="dashboard">
@@ -161,6 +182,53 @@ export default function Dashboard() {
               </span>
             </div>
 
+            <div className="store-modal-section">
+              <div className="store-modal-label">
+                📦 발주 필요
+                <span className="label-sub">아직 주문 안 함</span>
+                {selectedStock?.needOrder.length > 0 && (
+                  <button className="btn-sm btn-secondary label-action" onClick={handleCopyReorder}>
+                    복사
+                  </button>
+                )}
+              </div>
+              {!selectedStock || selectedStock.needOrder.length === 0 ? (
+                <p className="store-modal-empty">
+                  {selectedStock?.reported ? '없음' : '재고 보고가 없습니다'}
+                </p>
+              ) : (
+                <ul className="order-quick-list">
+                  {selectedStock.needOrder.map((n) => (
+                    <li key={n.name} className="order-quick-item">
+                      <span>{n.name}</span>
+                      <span className={`need-qty${n.qty <= 0 ? ' zero' : ''}`}>
+                        {n.qty}{n.unit} / 임계 {n.threshold}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="store-modal-section">
+              <div className="store-modal-label">
+                🚚 미도착 발주
+                <span className="label-sub">이미 주문함</span>
+              </div>
+              {selectedStatus.orderOverdue.length === 0 ? (
+                <p className="store-modal-empty">없음</p>
+              ) : (
+                <ul className="order-quick-list">
+                  {selectedStatus.orderOverdue.map((o, i) => (
+                    <li key={i} className="order-quick-item">
+                      <span>{o.text}</span>
+                      <span className="wait-tag">{waitLabel(o.age)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <DetailSection
               title="🔧 미해결 고장"
               items={selectedStatus.faults}
@@ -169,11 +237,6 @@ export default function Dashboard() {
             <DetailSection
               title="🗒️ 미해결 해야할일"
               items={selectedStatus.todos}
-              empty="없음"
-            />
-            <DetailSection
-              title="📦 미도착 발주"
-              items={selectedStatus.orderOverdue}
               empty="없음"
             />
 

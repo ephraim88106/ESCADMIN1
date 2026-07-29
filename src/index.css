@@ -2766,3 +2766,36 @@ body {
   margin-top: 6px;
   color: var(--text-muted);
 }
+
+/* 매장 상세 — 발주 필요 / 미도착 발주 구분 */
+.store-modal-label .label-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.store-modal-label .label-action {
+  float: right;
+}
+
+.need-qty {
+  font-size: 12px;
+  font-weight: 700;
+  color: #9a3412;
+  white-space: nowrap;
+}
+
+.need-qty.zero {
+  color: var(--danger);
+}
+
+.wait-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #3730a3;
+  background: #e0e7ff;
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
