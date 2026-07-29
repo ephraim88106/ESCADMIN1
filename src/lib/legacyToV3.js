@@ -1,8 +1,10 @@
 // 구양식 → v3 변환 초안
 //
-// 현장은 아직 대부분 구양식으로 보낸다. 구양식은 ■재고 개념 자체가 없어서
-// 파서를 아무리 강화해도 재고 숫자를 만들어낼 수 없다.
-// 그래서 "받는 쪽에서 v3 틀로 옮겨 담고 빈 칸만 채운다"가 현실적인 경로다.
+// 현장은 아직 대부분 구양식으로 보낸다. 표기가 매장마다 제각각이라
+// "받는 쪽에서 v3 틀로 옮겨 담고 빈 칸만 채운다"가 현실적인 경로다.
+//
+// 재고는 매장에 따라 주문 줄에 괄호로 붙여 온다 (`코코아 (재고1, 개봉0.4)`).
+// 그런 매장은 자동으로 분리되고, 아예 안 적는 매장만 직접 채우면 된다.
 //
 // 변환된 v3 텍스트는 그대로 복사해 매장에 돌려줄 수 있다.
 // 다음날부터 그 텍스트를 고쳐 쓰면 양식이 저절로 정착한다.
@@ -18,7 +20,7 @@ export const V3_FIELDS = [
   { key: '해야할일', hint: '' },
   { key: '온습도', required: true, hint: 'ㅁ구역명 / 53번 26.0' },
   { key: '빈자리', required: true, hint: '없으면 없음' },
-  { key: '재고', hint: '구양식에는 없던 항목 — 직접 채워야 합니다', spotlight: true },
+  { key: '재고', hint: '품목 수량 · 개봉은 소수점 (프림 1.5)', spotlight: true },
   { key: '주문', hint: '미도착은 (이전요청)' },
   { key: '입고', hint: '' },
   { key: '메모', hint: '' },
@@ -62,9 +64,22 @@ function zoneOf(line) {
 const FAULT_HINT = /고장|안\s?됨|안\s?켜|안\s?꺼|안\s?나|오류|누수|막힘|파손|깨|불량|작동|멈춤|끊김|소음|악취|더러/;
 const STANDING_HINT = /제공|전용|비밀번호|비번|청소|금지|안내|닫은|닫힌|어댑터|없는\s?자리|사용/;
 const TODO_HINT = /붙이|정리|교체\s?필요|확인\s?필요|해야|요청|주문\s?필요|신청/;
+// 주문 목록에 섞여 들어오는 점검 항목 (화곡 `제습기 물 비움` 등)
+const CHECK_HINT = /물\s?비움|물통\s?비우|창문\s?(확인|닫)|소등|잠금|선풍기\s?확인|냉난방기|쓰레기통\s?(비움|화목)/;
+// 위치·보관 안내는 상시안내로 (`도구함 오른쪽 제일 위칸에 나무꼬치 있음`)
+const PLACE_HINT = /있음|둠|보관|도구함|서랍|사물함|위칸|아래칸/;
+
+/** `[청소 - 화수목금토]`, `월 수 금 일 청소` 에서 요일만 뽑는다 */
+function extractCleaningDays(line) {
+  const m = String(line).match(/[월화수목금토일](?:\s*[월화수목금토일])+/);
+  if (m) return m[0].replace(/\s+/g, '');
+  if (/매일/.test(line)) return '매일';
+  return '';
+}
 
 function classifyNote(line) {
   if (TODO_HINT.test(line)) return '해야할일';
+  if (PLACE_HINT.test(line) && !FAULT_HINT.test(line)) return '상시안내';
   if (FAULT_HINT.test(line)) return '고장';
   if (STANDING_HINT.test(line)) return '상시안내';
   // 애매하면 고장으로 둔다. 미해결로 떠서 눈에 띄는 편이 놓치는 것보다 안전하다.
@@ -125,8 +140,46 @@ export function legacyToDraft(text, now = new Date()) {
   }
   fields.온습도 = tempOut.join('\n');
 
-  fields.주문 = toLines(get('주문/발주')).join('\n');
+  // 구양식 주문 줄에는 재고가 괄호로 붙어 온다.
+  //   `코코아 (재고1, 개봉0.4)`  → 재고 코코아 1.4 / 주문 코코아
+  //   `롤휴지 (재고1)☆☆☆☆☆`     → 재고 롤휴지 1   / 주문 롤휴지 #긴급
+  // "구양식에는 재고가 없다"는 판단은 틀렸다. 표기 위치가 다를 뿐이다.
+  const stockLines = [];
+  const checkLines = [];
+  const orderLines = [];
+  for (const line of toLines(get('주문/발주'))) {
+    if (CHECK_HINT.test(line) && !/\d/.test(line.replace(/\d+\s*번/g, ''))) {
+      checkLines.push(line.replace(/\(\s*이전\s*요청\s*\)/, '').trim());
+      continue;
+    }
+    const m = line.match(/\(\s*재고\s*(\d+(?:\.\d+)?)\s*(?:[,·]\s*개봉\s*(\d+(?:\.\d+)?)\s*)?\)/);
+    const urgent = /[☆★]{2,}/.test(line);
+    let name = line
+      .replace(/\(\s*재고[^)]*\)/, '')
+      .replace(/[☆★]{2,}/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    if (m) {
+      const qty = parseFloat(m[1]) + (m[2] ? parseFloat(m[2]) : 0);
+      const bare = name.replace(/\(\s*이전\s*요청\s*\)/, '').trim();
+      stockLines.push(`${bare} ${Number(qty.toFixed(2))}`);
+    }
+    if (urgent) name = `${name} #긴급`;
+    orderLines.push(name);
+  }
+  fields.재고 = stockLines.join('\n');
+  fields.주문 = orderLines.join('\n');
   fields.입고 = toLines(get('도착')).join('\n');
+  fields.해야할일 = [fields.해야할일, ...toLines(get('해야할일'))]
+    .filter(Boolean)
+    .join('\n');
+  if (checkLines.length) {
+    fields.점검 = [fields.점검, ...checkLines].filter(Boolean).join('\n');
+    notes.push(`점검 항목으로 보이는 ${checkLines.length}줄을 ■점검으로 옮겼습니다. 결과(O/X)를 적어주세요.`);
+  }
+  if (stockLines.length) {
+    notes.push(`주문 줄에 붙어 있던 재고 ${stockLines.length}건을 ■재고로 분리했습니다. (개봉분은 소수점으로 합산)`);
+  }
 
   // 남은 줄(전달사항)에서 건질 수 있는 것을 옮긴다.
   // 줄글로 온 문자는 대부분 여기로 떨어지므로, 놓치지 않게 훑는다.
@@ -135,13 +188,12 @@ export function legacyToDraft(text, now = new Date()) {
   const movedStanding = [];
   for (const line of toLines(get('전달사항'))) {
     if (/청소/.test(line)) {
-      movedStanding.push(
-        line.replace(/^청소\s*일정:\s*/, '').replace(/\s*청소\s*$/, '').trim()
-          ? `청소요일 ${line.replace(/^청소\s*일정:\s*/, '').replace(/\s*청소\s*$/, '').trim()}`
-          : line
-      );
+      const days = extractCleaningDays(line);
+      movedStanding.push(days ? `청소요일 ${days}` : line);
     } else if (/주문|발주|시켜|신청|부탁/.test(line) && /\d/.test(line)) {
       movedOrders.push(line);
+    } else if (PLACE_HINT.test(line) && !FAULT_HINT.test(line)) {
+      movedStanding.push(line);
     } else {
       rest.push(line);
     }
@@ -155,9 +207,10 @@ export function legacyToDraft(text, now = new Date()) {
   }
   fields.메모 = rest.join('\n');
 
-  // 구양식에는 재고 개념이 없다. 비워두고 반드시 알린다.
+  // 재고를 한 건도 못 뽑았을 때만 알린다.
+  // (`코코아 (재고1, 개봉0.4)` 처럼 주문 줄에 붙여 쓰는 매장은 위에서 이미 뽑았다)
   if (!fields.재고) {
-    notes.push('구양식에는 ■재고가 없습니다. 현재 남은 수량을 직접 넣어야 재고 화면에 잡힙니다.');
+    notes.push('■재고를 찾지 못했습니다. 남은 수량을 직접 넣어야 재고 화면에 잡힙니다.');
   }
   if (buckets.고장.length > 0) {
     notes.push(`특이사항 ${toLines(get('특이사항')).length}줄을 고장·상시안내·해야할일로 나눴습니다. 확인해 주세요.`);

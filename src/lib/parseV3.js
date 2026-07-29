@@ -44,9 +44,18 @@ const HEAD_ALIASES = {
 
 const EMPTY_TOKENS = ['없음', '없슴', '-', '해당없음', 'x', 'X'];
 
-/** ■ 로 시작하는 줄이 하나라도 있으면 v3 양식으로 본다 */
+/**
+ * v3 양식인지 판정.
+ *
+ * ■ 하나만 보고 판정하면 안 된다. 구양식 중에 `■강서방화점` 처럼
+ * ■ 를 매장명 앞에 쓰는 곳이 있어서, 그런 문자가 v3 파서로 넘어가면
+ * 아는 섹션이 하나도 없어 통째로 버려진다.
+ * 그래서 '■ + 아는 섹션명'이 2개 이상일 때만 v3로 본다.
+ */
 export function isV3Format(text) {
-  return /^\s*■/m.test(text || '');
+  const heads = String(text || '').match(/^\s*■\s*[^\s]+/gm) || [];
+  const known = heads.filter((h) => normalizeHead(h.trim()) !== null);
+  return known.length >= 2;
 }
 
 function normalizeHead(raw) {
@@ -118,14 +127,22 @@ function parseTemp(line, zone) {
 /** `롤휴지 4` / `프림 1.5` / `롤휴지 4 (이전요청)` */
 function parseItem(line) {
   const previous = /\(\s*이전\s*요청\s*\)/.test(line);
-  const body = line.replace(/\(\s*이전\s*요청\s*\)/, '').trim();
+  // `#긴급` 같은 태그는 품목명이 아니다. 남겨두면 재고 합산이 다른 품목으로 갈라진다.
+  const body = line
+    .replace(/\(\s*이전\s*요청\s*\)/, '')
+    .replace(/#\S+/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
   const m = body.match(/^(.*?)\s+(\d+(?:\.\d+)?)\s*(\S*)$/);
-  if (!m) return { name: body, qty: null, unit: '', previous, raw: line };
+  if (!m) {
+    return { name: body, qty: null, unit: '', previous, urgent: /#긴급|#급/.test(line), raw: line };
+  }
   return {
     name: m[1].trim(),
     qty: parseFloat(m[2]),
     unit: (m[3] || '').trim(),
     previous,
+    urgent: /#긴급|#급/.test(line),
     raw: line,
   };
 }

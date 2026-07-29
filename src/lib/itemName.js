@@ -9,6 +9,7 @@
 /** 비교용 키. 공백·괄호·중점 제거 + 소문자 */
 export function itemKey(name) {
   return String(name || '')
+    .replace(/#\S+/g, '')
     .replace(/[\s()[\]·・.,_-]/g, '')
     .toLowerCase();
 }

@@ -12,6 +12,7 @@ export function parseLegacy(text) {
     고정석: [],
     특이사항: [],
     온도: [],
+    해야할일: [],
     빈자리: [],
     주문: [],
     도착: [],
@@ -22,9 +23,10 @@ export function parseLegacy(text) {
   let mode = null;
   let tempZone = '';
   let seenBody = false;
+  let prevOrder = false;
 
   for (const raw of lines) {
-    const line = raw.trim();
+    let line = raw.trim();
     if (!line) continue;
 
     // --- 매장명 헤더 (스킵) ---
@@ -32,10 +34,18 @@ export function parseLegacy(text) {
     // 뒤에 부가정보가 붙어 있어도 인식되어야 한다.
     const isFirstLine = !seenBody;
     seenBody = true;
+    // ■ 를 섹션 표시로 쓰는 변형도 있으므로, 매장명이 없으면 떼고 본다
+    if (/^■/.test(line) && !detectStoreFromText(line)) {
+      line = line.replace(/^■\s*/, '');
+      if (!line) continue;
+    }
+    // `[고정석 19]` 처럼 대괄호로 시작해도 매장명이 없으면 헤더가 아니다.
+    // `■강서방화점` 처럼 ■ 를 매장명 앞에 쓰는 곳도 있다.
+    const hasStore = !!detectStoreFromText(line);
     if (
       /^[●▣]/.test(line) ||
-      /^\[.+\]/.test(line) ||
-      (isFirstLine && detectStoreFromText(line))
+      (/^[■[]/.test(line) && hasStore) ||
+      (isFirstLine && hasStore)
     ) {
       const cleanMatch = line.match(/\(([^)]*청소[^)]*)\)/);
       if (cleanMatch) result.전달.push('청소 일정: ' + cleanMatch[1]);
@@ -73,6 +83,20 @@ export function parseLegacy(text) {
       continue;
     }
 
+    // --- 해야할일 섹션 헤더 (`☆해야할일`, `해야할일`) ---
+    if (/^[▶★☆*]?\s*(해야\s?할\s?일|할\s?일|todo)\s*$/i.test(line)) {
+      mode = 'todo';
+      continue;
+    }
+    if (mode === 'todo') {
+      if (isSectionHeader(line) || isTemperature(line)) {
+        mode = null;
+      } else {
+        result.해야할일.push(line);
+        continue;
+      }
+    }
+
     // --- 특이사항 ---
     if (/^[▶★☆*]/.test(line)) {
       result.특이사항.push(line.replace(/^[▶★☆*]\s*/, ''));
@@ -94,21 +118,31 @@ export function parseLegacy(text) {
       continue;
     }
     if (mode === 'empty') {
-      result.빈자리.push(line);
-      mode = null;
-      continue;
+      // `빈자리` 바로 다음이 `도착` 같은 다른 섹션이면 빈자리는 비어 있는 것이다
+      if (isSectionHeader(line)) {
+        result.빈자리.push('없음');
+        mode = null;
+      } else {
+        result.빈자리.push(line);
+        mode = null;
+        continue;
+      }
     }
 
     // --- 주문 ---
     if (/^이전\s*주문$|^주문$/i.test(line)) {
       mode = 'order';
+      prevOrder = /^이전/.test(line);
       continue;
     }
     if (mode === 'order') {
       if (isSectionHeader(line)) {
         mode = null;
       } else {
-        result.주문.push(line);
+        // `이전주문` 아래 줄들은 아직 안 온 발주다 = v3 의 (이전요청)
+        result.주문.push(
+          prevOrder && !/\(\s*이전\s*요청\s*\)/.test(line) ? `${line} (이전요청)` : line
+        );
         continue;
       }
     }
@@ -166,6 +200,7 @@ export function parseLegacy(text) {
   push('고정석', result.고정석);
   push('특이사항', result.특이사항);
   push('온도체크', result.온도);
+  push('해야할일', result.해야할일);
   push('빈자리', result.빈자리);
   push('주문/발주', result.주문);
   push('도착', result.도착);
@@ -186,5 +221,5 @@ export function isTemperature(line) {
 }
 
 function isSectionHeader(line) {
-  return /^[ㄴ]?\s*빈\s?(자리|좌석)|^도착$|^주문$|^이전\s*주문$|^스터디|^카페/i.test(line);
+  return /^[ㄴ]?\s*빈\s?(자리|좌석)|^도착$|^주문$|^이전\s*주문$|^스터디|^카페|^[▶★☆*]?\s*(해야\s?할\s?일|할\s?일)\s*$/i.test(line);
 }
