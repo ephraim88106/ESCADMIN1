@@ -124,26 +124,45 @@ function parseTemp(line, zone) {
   };
 }
 
-/** `롤휴지 4` / `프림 1.5` / `롤휴지 4 (이전요청)` */
+/**
+ * 주문 한 줄에 네 가지가 들어간다 (2026-07-29 확정 — 재고 섹션을 따로 두지 않는다).
+ *
+ *   롤휴지 4 (재고 2) #긴급 (이전요청)
+ *   └품목 └주문수량  └현재고  └긴급   └미도착
+ *
+ * 주문수량은 생략 가능하고, 재고는 `(재고1, 개봉0.4)` 처럼 나눠 써도 된다.
+ * 매장마다 쓰는 습관이 달라 둘 다 읽는다.
+ */
 function parseItem(line) {
-  const previous = /\(\s*이전\s*요청\s*\)/.test(line);
-  // `#긴급` 같은 태그는 품목명이 아니다. 남겨두면 재고 합산이 다른 품목으로 갈라진다.
-  const body = line
-    .replace(/\(\s*이전\s*요청\s*\)/, '')
+  const raw = String(line);
+  const previous = /\(\s*이전\s*요청\s*\)/.test(raw);
+  const urgent = /#긴급|#급|[☆★]{2,}/.test(raw);
+
+  const stockMatch = raw.match(
+    /\(\s*재고\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:[,·]\s*개봉\s*[:：]?\s*(\d+(?:\.\d+)?)\s*)?\)/
+  );
+  const stock = stockMatch
+    ? Number((parseFloat(stockMatch[1]) + (stockMatch[2] ? parseFloat(stockMatch[2]) : 0)).toFixed(2))
+    : null;
+
+  const body = raw
+    .replace(/\(\s*이전\s*요청\s*\)/g, '')
+    .replace(/\(\s*재고[^)]*\)/g, '')
     .replace(/#\S+/g, '')
+    .replace(/[☆★]{2,}/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
+
   const m = body.match(/^(.*?)\s+(\d+(?:\.\d+)?)\s*(\S*)$/);
-  if (!m) {
-    return { name: body, qty: null, unit: '', previous, urgent: /#긴급|#급/.test(line), raw: line };
-  }
+  if (!m) return { name: body, qty: null, unit: '', stock, previous, urgent, raw };
   return {
     name: m[1].trim(),
     qty: parseFloat(m[2]),
     unit: (m[3] || '').trim(),
+    stock,
     previous,
-    urgent: /#긴급|#급/.test(line),
-    raw: line,
+    urgent,
+    raw,
   };
 }
 
@@ -249,6 +268,7 @@ export function toSections(parsed) {
       .join('\n')
   );
   push('빈자리', parsed.emptySeats.join(', '));
+  // ■재고는 구버전 호환용. 새 양식에서는 주문 줄의 (재고 N) 으로 대체됐다.
   push('재고', parsed.inventory.map((i) => i.raw).join('\n'));
   push('주문', parsed.orders.map((i) => i.raw).join('\n'));
   push('입고', parsed.arrivals.map((i) => i.raw).join('\n'));

@@ -2824,3 +2824,13 @@ body {
   font-weight: 500;
   color: var(--text-muted);
 }
+
+.urgent-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--danger);
+  border-radius: 999px;
+  padding: 1px 6px;
+  margin-left: 5px;
+}

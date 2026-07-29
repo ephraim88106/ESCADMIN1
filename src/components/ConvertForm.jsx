@@ -31,7 +31,9 @@ export default function ConvertForm({ rawText, upsertHandoff, findSameDay, onDon
 
   const parsed = useMemo(() => (v3Text ? parseV3(v3Text) : null), [v3Text]);
   const sameDay = store && parsed ? findSameDay?.(store.id, parsed.dateKey) : null;
-  const stockEmpty = !(fields.재고 || '').trim();
+  // 주문 줄에 (재고 N) 이 하나도 없으면 재고 화면에 안 잡힌다
+  const orderText = (fields.주문 || '').trim();
+  const stockEmpty = !!orderText && !/\(\s*재고/.test(orderText);
 
   const setField = (key, value) => setFields((p) => ({ ...p, [key]: value }));
 
@@ -119,7 +121,8 @@ export default function ConvertForm({ rawText, upsertHandoff, findSameDay, onDon
 
       {stockEmpty && (
         <div className="convert-warn">
-          ■재고가 비어 있습니다. 이대로 등록하면 이 매장은 재고 화면에 안 잡힙니다.
+          주문 줄에 재고가 없습니다. <code>롤휴지 4 (재고 2)</code> 처럼 남은 수량을 적어야
+          재고 화면에 잡힙니다.
         </div>
       )}
 

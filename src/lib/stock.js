@@ -3,10 +3,10 @@
 // 목적: 통일양식으로 들어온 ■재고 / ■주문 / ■입고를 17개 매장 기준으로 합산해
 //       "어느 매장에 뭐가 떨어졌는지"를 한 화면에서 본다.
 //
-// 재고 생명주기 (버그 수정 후 확정):
-//   ■재고  = 그날 센 현재고 (스냅샷)
-//   ■주문  = 요청함. (이전요청) 이면 아직 안 옴 → 재고는 변하지 않는다
-//   ■입고  = 실제 도착 → 이때만 재고가 늘어난다
+// 주문과 재고는 한 줄이다 (2026-07-29 확정).
+//   ■주문  롤휴지 4 (재고 2) #긴급 (이전요청)
+//   ■입고  실제 도착
+// 구버전 ■재고 섹션도 계속 읽는다(하위호환). 두 곳에 다 있으면 주문 줄이 이긴다.
 //
 // 발주 분류는 '문자에 쓰인 대로' 따른다 (2026-07-29 확정).
 //   ■주문 중 (이전요청) 없는 줄 → 발주 필요   = 담당자가 오늘 새로 요청한 것
@@ -31,10 +31,17 @@ export function buildStoreStock(handoffs, aliasMap, today) {
 
   const stock = new Map(); // canonical -> { qty, unit, raw }
   if (last) {
+    // 1) 구버전 ■재고 섹션
     for (const item of last.handoff.parsed.inventory || []) {
       if (item.qty == null) continue;
       const name = canonicalName(item.name, aliasMap);
       stock.set(name, { qty: item.qty, unit: item.unit || '', raw: item.name });
+    }
+    // 2) 주문 줄의 (재고 N) — 새 양식. 같은 품목이면 이쪽이 이긴다.
+    for (const o of last.handoff.parsed.orders || []) {
+      if (o.stock == null) continue;
+      const name = canonicalName(o.name, aliasMap);
+      stock.set(name, { qty: o.stock, unit: '', raw: o.name });
     }
   }
 

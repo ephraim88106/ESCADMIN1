@@ -206,7 +206,10 @@ export default function Dashboard() {
                 <ul className="order-quick-list">
                   {selectedStock.needOrder.map((n) => (
                     <li key={n.name} className="order-quick-item">
-                      <span>{n.name}</span>
+                      <span>
+                        {n.name}
+                        {n.urgent && <span className="urgent-badge">긴급</span>}
+                      </span>
                       <span className="need-qty">
                         {n.qty != null ? `${n.qty}${n.unit}` : '수량 미기재'}
                         {n.stock != null && (

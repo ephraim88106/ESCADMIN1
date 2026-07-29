@@ -3,8 +3,8 @@
 // 현장은 아직 대부분 구양식으로 보낸다. 표기가 매장마다 제각각이라
 // "받는 쪽에서 v3 틀로 옮겨 담고 빈 칸만 채운다"가 현실적인 경로다.
 //
-// 재고는 매장에 따라 주문 줄에 괄호로 붙여 온다 (`코코아 (재고1, 개봉0.4)`).
-// 그런 매장은 자동으로 분리되고, 아예 안 적는 매장만 직접 채우면 된다.
+// 재고는 주문 줄 안에 괄호로 쓴다 (`코코아 (재고1, 개봉0.4)`).
+// 섹션을 따로 두지 않으므로 담당자가 같은 품목을 두 번 적을 일이 없다.
 //
 // 변환된 v3 텍스트는 그대로 복사해 매장에 돌려줄 수 있다.
 // 다음날부터 그 텍스트를 고쳐 쓰면 양식이 저절로 정착한다.
@@ -20,8 +20,11 @@ export const V3_FIELDS = [
   { key: '해야할일', hint: '' },
   { key: '온습도', required: true, hint: 'ㅁ구역명 / 53번 26.0' },
   { key: '빈자리', required: true, hint: '없으면 없음' },
-  { key: '재고', hint: '품목 수량 · 개봉은 소수점 (프림 1.5)', spotlight: true },
-  { key: '주문', hint: '미도착은 (이전요청)' },
+  {
+    key: '주문',
+    hint: '롤휴지 4 (재고 2) #긴급 · 미도착은 (이전요청)',
+    spotlight: true,
+  },
   { key: '입고', hint: '' },
   { key: '메모', hint: '' },
 ];
@@ -140,34 +143,30 @@ export function legacyToDraft(text, now = new Date()) {
   }
   fields.온습도 = tempOut.join('\n');
 
-  // 구양식 주문 줄에는 재고가 괄호로 붙어 온다.
-  //   `코코아 (재고1, 개봉0.4)`  → 재고 코코아 1.4 / 주문 코코아
-  //   `롤휴지 (재고1)☆☆☆☆☆`     → 재고 롤휴지 1   / 주문 롤휴지 #긴급
-  // "구양식에는 재고가 없다"는 판단은 틀렸다. 표기 위치가 다를 뿐이다.
-  const stockLines = [];
+  // 주문과 재고는 한 줄로 둔다. 구양식이 이미 그렇게 쓰고 있었다.
+  //   `롤휴지 (재고1)☆☆☆☆☆` → `롤휴지 (재고 1) #긴급`
+  //   `코코아 (재고1, 개봉0.4)` → 표기 그대로 유지 (파서가 1.4로 읽는다)
   const checkLines = [];
   const orderLines = [];
+  let stockCount = 0;
   for (const line of toLines(get('주문/발주'))) {
     if (CHECK_HINT.test(line) && !/\d/.test(line.replace(/\d+\s*번/g, ''))) {
       checkLines.push(line.replace(/\(\s*이전\s*요청\s*\)/, '').trim());
       continue;
     }
-    const m = line.match(/\(\s*재고\s*(\d+(?:\.\d+)?)\s*(?:[,·]\s*개봉\s*(\d+(?:\.\d+)?)\s*)?\)/);
+    if (/\(\s*재고/.test(line)) stockCount += 1;
     const urgent = /[☆★]{2,}/.test(line);
-    let name = line
-      .replace(/\(\s*재고[^)]*\)/, '')
+    let out = line
       .replace(/[☆★]{2,}/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
-    if (m) {
-      const qty = parseFloat(m[1]) + (m[2] ? parseFloat(m[2]) : 0);
-      const bare = name.replace(/\(\s*이전\s*요청\s*\)/, '').trim();
-      stockLines.push(`${bare} ${Number(qty.toFixed(2))}`);
+    if (urgent) {
+      // (이전요청) 은 항상 맨 뒤에 오도록
+      const prev = /\(\s*이전\s*요청\s*\)/.test(out);
+      out = `${out.replace(/\(\s*이전\s*요청\s*\)/, '').trim()} #긴급${prev ? ' (이전요청)' : ''}`;
     }
-    if (urgent) name = `${name} #긴급`;
-    orderLines.push(name);
+    orderLines.push(out);
   }
-  fields.재고 = stockLines.join('\n');
   fields.주문 = orderLines.join('\n');
   fields.입고 = toLines(get('도착')).join('\n');
   fields.해야할일 = [fields.해야할일, ...toLines(get('해야할일'))]
@@ -177,8 +176,8 @@ export function legacyToDraft(text, now = new Date()) {
     fields.점검 = [fields.점검, ...checkLines].filter(Boolean).join('\n');
     notes.push(`점검 항목으로 보이는 ${checkLines.length}줄을 ■점검으로 옮겼습니다. 결과(O/X)를 적어주세요.`);
   }
-  if (stockLines.length) {
-    notes.push(`주문 줄에 붙어 있던 재고 ${stockLines.length}건을 ■재고로 분리했습니다. (개봉분은 소수점으로 합산)`);
+  if (stockCount) {
+    notes.push(`주문 ${stockCount}줄에서 (재고 N) 을 읽었습니다. 재고는 주문 줄에 그대로 둡니다.`);
   }
 
   // 남은 줄(전달사항)에서 건질 수 있는 것을 옮긴다.
@@ -207,10 +206,8 @@ export function legacyToDraft(text, now = new Date()) {
   }
   fields.메모 = rest.join('\n');
 
-  // 재고를 한 건도 못 뽑았을 때만 알린다.
-  // (`코코아 (재고1, 개봉0.4)` 처럼 주문 줄에 붙여 쓰는 매장은 위에서 이미 뽑았다)
-  if (!fields.재고) {
-    notes.push('■재고를 찾지 못했습니다. 남은 수량을 직접 넣어야 재고 화면에 잡힙니다.');
+  if (fields.주문 && !stockCount) {
+    notes.push('주문 줄에 재고가 없습니다. `롤휴지 4 (재고 2)` 처럼 남은 수량을 적어주세요.');
   }
   if (buckets.고장.length > 0) {
     notes.push(`특이사항 ${toLines(get('특이사항')).length}줄을 고장·상시안내·해야할일로 나눴습니다. 확인해 주세요.`);
