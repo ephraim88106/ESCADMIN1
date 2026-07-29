@@ -57,11 +57,6 @@ function oneCharApart(a, b) {
   return diff === 1;
 }
 
-/** 문자열 안의 숫자들만 뽑는다 (`번호등13번` → `13`) */
-function digitsOf(t) {
-  return (String(t).match(/\d+/g) || []).join(',');
-}
-
 /** 두 문자열의 공통 앞부분 길이 */
 function commonPrefix(a, b) {
   const n = Math.min(a.length, b.length);
