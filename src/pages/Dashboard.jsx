@@ -315,7 +315,10 @@ function DetailSection({ title, items, empty }) {
           {items.map((it, i) => (
             <li key={i} className="order-quick-item">
               <span>{it.text}</span>
-              <RepeatTag count={it.count} changed={it.changed} />
+              <span className="order-quick-tags">
+                <AgeTag age={it.age} />
+                <RepeatTag count={it.count} changed={it.changed} />
+              </span>
             </li>
           ))}
         </ul>

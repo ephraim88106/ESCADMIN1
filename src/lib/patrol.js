@@ -57,19 +57,60 @@ function oneCharApart(a, b) {
   return diff === 1;
 }
 
+/** 문자열 안의 숫자들만 뽑는다 (`번호등13번` → `13`) */
+function digitsOf(t) {
+  return (String(t).match(/\d+/g) || []).join(',');
+}
+
+/** 두 문자열의 공통 앞부분 길이 */
+function commonPrefix(a, b) {
+  const n = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < n && a[i] === b[i]) i += 1;
+  return i;
+}
+
 /**
  * 이번 줄이 이미 열려 있는 항목과 같은 건인지 찾는다.
- * 담당자가 매일 조금씩 다르게 적기 때문에 (`번호등 13` → `번호등 13번 고장`)
- * 글자가 정확히 같을 때만 같은 건으로 보면 나이가 매일 리셋되고 칸이 늘어난다.
+ *
+ * 담당자가 매일 조금씩 다르게 적는다 (`번호등 13` → `번호등 13번` → `번호등 13번 고장`).
+ * 글자가 정확히 같을 때만 같은 건으로 보면 칸이 매일 늘고 나이도 리셋된다.
+ *
+ * 판정 기준 (2026-07-29 주인님 선택 — 앞부분이 같으면 합친다):
+ *   1) 한쪽이 다른 쪽을 포함
+ *   2) 길이가 같고 한 글자만 다름
+ *   3) 앞부분이 3자 이상 같음 (`정수기 물 안나옴` ↔ `정수기 필터 교체 필요`)
+ *
+ * 안전장치: 양쪽에 숫자가 있고 그 숫자가 다르면 어떤 규칙으로도 합치지 않는다.
+ * `번호등 13` 과 `번호등 15` 는 한 글자 차이여도 다른 좌석의 다른 고장이다.
+ * (`번호등 13` ↔ `번호등 13번 고장` 은 숫자가 같으므로 합쳐진다)
+ *
+ * 그래도 잘못 합쳐질 수 있으므로, 합쳐진 항목에는 ✎ 를 붙여 눈으로 확인하게 한다.
  */
 function findSame(key, prevKeys) {
   if (prevKeys.has(key)) return key;
+  let best = null;
+  let bestScore = 0;
+  const keyDigits = digitsOf(key);
   for (const k of prevKeys) {
+    // 숫자가 서로 다르면 다른 건이다. 어떤 규칙보다 이게 우선한다.
+    const kDigits = digitsOf(k);
+    if (keyDigits && kDigits && keyDigits !== kDigits) continue;
+
     const [short, long] = k.length <= key.length ? [k, key] : [key, k];
-    if (short.length >= 3 && long.includes(short)) return k;
-    if (oneCharApart(k, key)) return k;
+    let score = 0;
+    if (short.length >= 3 && long.includes(short)) score = 1000 + short.length;
+    else if (oneCharApart(k, key)) score = 900;
+    else {
+      const p = commonPrefix(k, key);
+      if (p >= 3) score = p;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = k;
+    }
   }
-  return null;
+  return best;
 }
 
 /**
