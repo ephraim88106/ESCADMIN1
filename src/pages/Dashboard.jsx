@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { STORES } from '../data/stores';
 import { useAllHandoffs, useNotices, useItems, useResolutions, useTrash } from '../hooks/useFirestore';
-import { buildPatrolList, summarize, todayKey, THRESHOLDS } from '../lib/patrol';
+import { buildPatrolList, summarize, todayKey, THRESHOLDS, cardClass } from '../lib/patrol';
 import { buildStoreReorder, storeReorderToText, waitLabel } from '../lib/stock';
 import { buildAliasMap } from '../lib/itemName';
 import PasteBox from '../components/PasteBox';
 
 const REASON_CLASS = {
   missing: 'reason-missing',
+  none: 'reason-none',
   stale: 'reason-stale',
   open: 'reason-open',
   order: 'reason-order',
@@ -237,6 +238,16 @@ export default function Dashboard() {
         </button>
       </div>
 
+      <div className="patrol-legend">
+        <span className="legend-item"><i className="swatch sw-missing" />오늘 끊김</span>
+        <span className="legend-item"><i className="swatch sw-a3" />5일↑</span>
+        <span className="legend-item"><i className="swatch sw-a2" />3~4일</span>
+        <span className="legend-item"><i className="swatch sw-a1" />1~2일</span>
+        <span className="legend-item"><i className="swatch sw-a0" />오늘</span>
+        <span className="legend-item"><i className="swatch sw-clear" />이상 없음</span>
+        <span className="legend-item"><i className="swatch sw-none" />첫 등록 전</span>
+      </div>
+
       {loading ? (
         <p className="loading">불러오는 중...</p>
       ) : visible.length === 0 ? (
@@ -248,7 +259,7 @@ export default function Dashboard() {
           {visible.map((s, idx) => (
             <li
               key={s.store.id}
-              className={`patrol-item${s.submittedToday ? '' : ' patrol-missing'}${s.isClear ? ' patrol-clear' : ''}`}
+              className={`patrol-item ${cardClass(s)}`}
               onClick={() => setSelected(s.store.id)}
             >
               <span className="patrol-rank">{idx + 1}</span>

@@ -290,7 +290,8 @@ export function buildStoreStatus(store, handoffs, today, resolutions = []) {
     reasons.push(
       lastDateKey
         ? { kind: 'missing', text: `문자 미제출 ${daysSinceReport}일째` }
-        : { kind: 'missing', text: '보고 기록 없음 (첫 등록 전)' }
+        // 첫 등록 전은 경고가 아니다. 카드가 중립색인데 배지만 붉으면 앞뒤가 안 맞는다.
+        : { kind: 'none', text: '보고 기록 없음 (첫 등록 전)' }
     );
   }
   if (maxAge >= THRESHOLDS.staleDays) {
@@ -362,6 +363,37 @@ export function buildStoreStatus(store, handoffs, today, resolutions = []) {
       orderOverdue.length === 0 &&
       newOrders.length === 0,
   };
+}
+
+/**
+ * 대시보드 카드 색 단계.
+ *
+ * 색을 두 축으로 나눈다.
+ *   보고 상태 — 아직 안 온 건지, 오던 게 끊긴 건지, 왔는지
+ *   방치 일수 — 보고가 왔다면 미해결이 며칠째인지
+ *
+ * 예전에는 '첫 등록 전'과 '오늘 끊김'이 똑같이 붉었다.
+ * 도입 초기에는 전 매장이 첫 등록 전이라 화면이 통째로 붉어지고,
+ * 그러면 진짜 신호인 '어제까지 오다가 오늘 끊긴 매장'이 그 안에 묻힌다.
+ * 첫 등록 전은 아직 아무 일도 일어나지 않은 상태이므로 중립색으로 뺀다.
+ *
+ * 보고가 들어왔는데도 색이 안 변하던 것도 같은 문제였다.
+ * 미해결이 하나라도 있으면 회색에 머물러서 보고가 올라온 티가 나지 않았다.
+ */
+export function cardState(s) {
+  if (!s.lastDateKey) return { kind: 'none', level: 0 };
+  if (!s.submittedToday) return { kind: 'missing', level: 0 };
+  if (s.isClear) return { kind: 'clear', level: 0 };
+
+  const a = s.maxAge ?? 0;
+  const level = a >= 5 ? 3 : a >= THRESHOLDS.staleDays ? 2 : a >= 1 ? 1 : 0;
+  return { kind: 'open', level };
+}
+
+/** 카드에 붙일 클래스 문자열 */
+export function cardClass(s) {
+  const { kind, level } = cardState(s);
+  return kind === 'open' ? `patrol-open age-${level}` : `patrol-${kind}`;
 }
 
 /** 전 매장을 위험순으로 정렬 */
