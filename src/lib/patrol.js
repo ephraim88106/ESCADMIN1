@@ -314,9 +314,28 @@ export function buildStoreStatus(store, handoffs, today, resolutions = []) {
     reasons.push({ kind: 'temp', text: `온습도 이탈 ${temps.length}곳` });
   }
 
+  /**
+   * 저장된 보고 전부. foldByDate 로 접기 전 원본을 그대로 낸다.
+   *
+   * 접은 목록만 보여주면 같은 날 두 번 등록된 기록 중 밀린 쪽이 화면에 안 잡히고,
+   * 그러면 지울 방법이 없어진다. 계산에 쓰인 건 active 로 구분만 해준다.
+   */
+  const activeIds = new Set(reports.map((r) => r.handoff.id));
+  const reportList = (handoffs || [])
+    .slice()
+    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    .map((h) => ({
+      id: h.id,
+      dateKey: h.parsed?.dateKey || toDateKey(h.createdAt ?? Date.now()),
+      createdAt: h.createdAt ?? null,
+      formatVersion: h.parsed?.formatVersion ?? null,
+      active: activeIds.has(h.id),
+    }));
+
   return {
     store,
     lastDateKey,
+    reportList,
     daysSinceReport,
     submittedToday,
     parsed,

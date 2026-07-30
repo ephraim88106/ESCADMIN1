@@ -2932,3 +2932,35 @@ body {
   cursor: pointer;
   white-space: nowrap;
 }
+
+.delete-error {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.report-flag {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+}
+
+.report-flag.dim {
+  background: var(--bg-subtle, #f1f5f9);
+  color: var(--text-muted);
+}
+
+/* 보고 목록의 삭제 버튼. 설명이 길어지면 버튼이 '삭 제'로 접혀서 눌리는 폭이 줄었다. */
+.order-quick-item > .btn-danger {
+  flex-shrink: 0;
+  white-space: nowrap;
+  align-self: flex-start;
+}

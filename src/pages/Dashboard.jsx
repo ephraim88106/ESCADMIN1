@@ -46,6 +46,14 @@ function Variants({ list, current }) {
   return <span className="item-variants">묶임 · {others.join(' / ')}</span>;
 }
 
+/** 등록 시각. 같은 날 두 번 넣었을 때 어느 게 나중 것인지 구분하려면 시각이 필요하다. */
+function formatStamp(ms) {
+  if (!ms) return '등록 시각 모름';
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())} 등록`;
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { byStore, loading, upsertHandoff, findSameDay, removeHandoff } = useAllHandoffs();
@@ -55,6 +63,8 @@ export default function Dashboard() {
   const [showPaste, setShowPaste] = useState(false);
   const [selected, setSelected] = useState(null);
   const [showAll, setShowAll] = useState(false);
+  // 삭제가 실패해도 지금까지는 화면에 아무 표시가 없었다 → "눌렀는데 안 되네"가 됐다
+  const [deleteError, setDeleteError] = useState(null);
 
   const today = todayKey();
   const patrol = useMemo(
@@ -97,17 +107,23 @@ export default function Dashboard() {
   };
 
   /**
-   * 마지막 보고를 지운다. 잘못 붙여넣었을 때 쓰는 길이다.
-   * 그 이전 보고까지 손대려면 인수인계 페이지로 간다 — 여기서 과거를 뒤지게 하면 실수가 커진다.
+   * 보고 한 건을 지운다.
+   *
+   * 실패를 삼키지 않는다. 예전에는 await 만 걸어둬서 서버가 거부해도 화면이 그대로였고,
+   * 그래서 "삭제가 안 된다"로 보였다. 실패하면 이유를 띄운다.
    */
-  const handleDeleteReport = async () => {
-    if (!selectedStatus?.lastHandoffId) return;
-    const label = selectedStatus.lastDateKey || '';
+  const handleDeleteReport = async (report) => {
+    if (!selectedStatus || !report?.id) return;
+    const label = report.dateKey || '';
     if (!window.confirm(`${selectedStatus.store.name} ${label} 보고를 지울까요?\n되돌릴 수 없습니다.`)) {
       return;
     }
-    await removeHandoff(selectedStatus.store.id, selectedStatus.lastHandoffId);
-    setSelected(null);
+    setDeleteError(null);
+    try {
+      await removeHandoff(selectedStatus.store.id, report.id);
+    } catch (e) {
+      setDeleteError(`${label} 보고를 지우지 못했습니다 — ${e?.code || e?.message || '알 수 없는 오류'}`);
+    }
   };
 
   const handleCopyReorder = () => {
@@ -327,13 +343,53 @@ export default function Dashboard() {
               </div>
             )}
 
-            <div className="modal-actions store-modal-actions">
-              <button className="btn-secondary" onClick={() => setSelected(null)}>닫기</button>
-              {selectedStatus.lastHandoffId && (
-                <button className="btn-sm btn-danger" onClick={handleDeleteReport}>
-                  🗑 {selectedStatus.lastDateKey} 보고 삭제
-                </button>
+            <div className="store-modal-section">
+              <div className="store-modal-label">
+                📄 등록된 보고
+                <span className="label-sub">잘못 넣은 건 여기서 지웁니다</span>
+              </div>
+              {deleteError && <p className="delete-error">⚠️ {deleteError}</p>}
+              {selectedStatus.reportList.length === 0 ? (
+                <p className="store-modal-empty">없음</p>
+              ) : (
+                <ul className="order-quick-list">
+                  {selectedStatus.reportList.map((r) => (
+                    <li key={r.id} className="order-quick-item">
+                      <span className="item-main">
+                        <span>
+                          {r.dateKey}
+                          {r.formatVersion !== 'v3' && (
+                            <span className="report-flag">구양식</span>
+                          )}
+                          {!r.active && <span className="report-flag dim">계산 제외</span>}
+                        </span>
+                        <span className="item-variants">
+                          {formatStamp(r.createdAt)}
+                          {!r.active && ' · 같은 날 더 최신 보고가 있습니다'}
+                        </span>
+                      </span>
+                      <button
+                        className="btn-sm btn-danger"
+                        onClick={() => handleDeleteReport(r)}
+                      >
+                        삭제
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
+            </div>
+
+            <div className="modal-actions store-modal-actions">
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setSelected(null);
+                  setDeleteError(null);
+                }}
+              >
+                닫기
+              </button>
               <button
                 className="btn-primary"
                 onClick={() => navigate(`/store/${selectedStatus.store.id}/board/handoff`)}
