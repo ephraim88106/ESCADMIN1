@@ -107,6 +107,9 @@ function findSame(key, prevKeys) {
  * - 이번 보고에 없는 항목 → 해결된 것으로 보고 제거
  * - 처음 등장한 항목 → firstDate 기록
  * - 다시 등장한 항목 → count 증가. 문구가 바뀌었으면 최신 문구로 갱신하고 changed 표시
+ * - lastAt: 이 항목이 마지막으로 올라온 보고의 등록 시각.
+ *   임원이 '해결' 처리한 뒤에도 매장이 계속 올리면 다시 살아나야 하므로,
+ *   해결 시각과 비교할 기준이 필요하다.
  *
  * v3로 파싱된 보고만 사용한다. 구양식 보고를 섞으면 전량 '해결'로 오판된다.
  */
@@ -115,6 +118,7 @@ export function trackOpenItems(reports, pick) {
   for (const { dateKey, handoff } of reports) {
     if (handoff.parsed?.formatVersion !== 'v3') continue;
     const items = pick(handoff.parsed) || [];
+    const at = handoff.createdAt ?? 0;
 
     // 같은 보고 안의 두 줄이 서로 합쳐지지 않도록, 이전 보고까지의 키만 후보로 둔다
     const prevKeys = new Set(open.keys());
@@ -132,6 +136,7 @@ export function trackOpenItems(reports, pick) {
         }
         // 합쳐진 원본을 모두 남긴다. 칸은 접되 내용은 버리지 않는다.
         if (!entry.variants.some((v) => normText(v) === key)) entry.variants.push(text);
+        entry.lastAt = at;
         seen.add(hit);
       } else if (!open.has(key)) {
         open.set(key, {
@@ -140,9 +145,11 @@ export function trackOpenItems(reports, pick) {
           count: 1,
           changed: false,
           variants: [text],
+          lastAt: at,
         });
         seen.add(key);
       } else {
+        open.get(key).lastAt = at;
         seen.add(key);
       }
     }
@@ -152,6 +159,34 @@ export function trackOpenItems(reports, pick) {
     }
   }
   return [...open.values()];
+}
+
+/**
+ * 임원이 직접 닫은 항목을 걸러낸다.
+ *
+ * v3 규칙만 쓰면 고장 줄은 '매장이 다음 문자에서 빼야' 사라진다.
+ * 임원이 현장에서 고쳐놓고도 매장 문자를 기다려야 하는 게 실제 불편이었다.
+ *
+ * 되살아나는 조건: 해결 처리한 뒤에 올라온 보고에 그 항목이 또 있으면 다시 띄운다.
+ * 매장이 계속 올린다는 건 아직 안 고쳐졌다는 뜻이므로, 임원의 판단보다 현장을 믿는다.
+ *
+ * 문구가 흔들려도(variants) 같은 건으로 보고 매칭한다.
+ */
+export function applyResolutions(items, resolutions, kind) {
+  const mine = (resolutions || []).filter((r) => r.kind === kind);
+  if (mine.length === 0) return { open: items, resolved: [] };
+
+  const open = [];
+  const resolved = [];
+  for (const it of items) {
+    const keys = new Set([normText(it.text), ...(it.variants || []).map(normText)]);
+    const hit = mine.find(
+      (r) => keys.has(normText(r.text)) && (r.resolvedAt ?? 0) >= (it.lastAt ?? 0)
+    );
+    if (hit) resolved.push({ ...it, resolution: hit });
+    else open.push(it);
+  }
+  return { open, resolved };
 }
 
 function tempFlags(parsed) {
@@ -175,8 +210,9 @@ function tempFlags(parsed) {
  * @param {object} store  STORES 항목
  * @param {Array}  handoffs 이 매장의 보고 전체
  * @param {string} today  YYYY-MM-DD
+ * @param {Array}  resolutions 이 매장에서 임원이 직접 닫은 항목들
  */
-export function buildStoreStatus(store, handoffs, today) {
+export function buildStoreStatus(store, handoffs, today, resolutions = []) {
   const reports = foldByDate(handoffs || []);
   const last = reports[reports.length - 1] || null;
   const lastDateKey = last?.dateKey ?? null;
@@ -185,8 +221,18 @@ export function buildStoreStatus(store, handoffs, today) {
   const daysSinceReport = lastDateKey ? daysBetween(lastDateKey, today) : null;
   const submittedToday = daysSinceReport === 0;
 
-  const openFaults = trackOpenItems(reports, (p) => p.faults);
-  const openTodos = trackOpenItems(reports, (p) => p.todos);
+  const faultSplit = applyResolutions(
+    trackOpenItems(reports, (p) => p.faults),
+    resolutions,
+    'fault'
+  );
+  const todoSplit = applyResolutions(
+    trackOpenItems(reports, (p) => p.todos),
+    resolutions,
+    'todo'
+  );
+  const openFaults = faultSplit.open;
+  const openTodos = todoSplit.open;
   // 발주는 문자에 쓰인 대로 나눈다.
   //   (이전요청) 없음 → 발주 필요, (이전요청) 있음 → 미도착 발주
   // 며칠째인지는 '언제 처음 ■주문에 나왔나'로 센다.
@@ -218,6 +264,9 @@ export function buildStoreStatus(store, handoffs, today) {
 
   const faults = withAge(openFaults);
   const todos = withAge(openTodos);
+  // 닫은 항목도 화면에 남긴다. 잘못 눌렀을 때 되돌릴 수 있어야 한다.
+  const resolvedFaults = withAge(faultSplit.resolved);
+  const resolvedTodos = withAge(todoSplit.resolved);
   const orders = openOrders.slice().sort((a, b) => (b.age ?? 0) - (a.age ?? 0));
 
   const openItems = [...faults, ...todos];
@@ -271,8 +320,12 @@ export function buildStoreStatus(store, handoffs, today) {
     daysSinceReport,
     submittedToday,
     parsed,
+    // 대시보드에서 바로 지울 수 있도록 마지막 보고의 문서 id 를 들고 나간다
+    lastHandoffId: last?.handoff?.id ?? null,
     faults,
     todos,
+    resolvedFaults,
+    resolvedTodos,
     orders,
     newOrders,
     orderOverdue,
@@ -293,9 +346,16 @@ export function buildStoreStatus(store, handoffs, today) {
 }
 
 /** 전 매장을 위험순으로 정렬 */
-export function buildPatrolList(stores, handoffsByStore, today = todayKey()) {
+export function buildPatrolList(
+  stores,
+  handoffsByStore,
+  today = todayKey(),
+  resolutionsByStore = {}
+) {
   return stores
-    .map((s) => buildStoreStatus(s, handoffsByStore[s.id] || [], today))
+    .map((s) =>
+      buildStoreStatus(s, handoffsByStore[s.id] || [], today, resolutionsByStore[s.id] || [])
+    )
     .sort((a, b) => {
       if (a.tier !== b.tier) return a.tier - b.tier;
       if (b.score !== a.score) return b.score - a.score;

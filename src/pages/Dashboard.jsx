@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { STORES } from '../data/stores';
-import { useAllHandoffs, useNotices, useItems } from '../hooks/useFirestore';
+import { useAllHandoffs, useNotices, useItems, useResolutions } from '../hooks/useFirestore';
 import { buildPatrolList, summarize, todayKey, THRESHOLDS } from '../lib/patrol';
 import { buildStoreReorder, storeReorderToText, waitLabel } from '../lib/stock';
 import { buildAliasMap } from '../lib/itemName';
@@ -48,7 +48,8 @@ function Variants({ list, current }) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { byStore, loading, upsertHandoff, findSameDay } = useAllHandoffs();
+  const { byStore, loading, upsertHandoff, findSameDay, removeHandoff } = useAllHandoffs();
+  const { byStore: resolutionsByStore, resolve, unresolve } = useResolutions();
   const { notices } = useNotices();
   const { items: master } = useItems();
   const [showPaste, setShowPaste] = useState(false);
@@ -57,8 +58,8 @@ export default function Dashboard() {
 
   const today = todayKey();
   const patrol = useMemo(
-    () => buildPatrolList(STORES, byStore, today),
-    [byStore, today]
+    () => buildPatrolList(STORES, byStore, today, resolutionsByStore),
+    [byStore, today, resolutionsByStore]
   );
   const stats = useMemo(() => summarize(patrol), [patrol]);
 
@@ -87,6 +88,27 @@ export default function Dashboard() {
     () => (selected ? buildStoreReorder(byStore[selected] || [], aliasMap, today) : null),
     [selected, byStore, aliasMap, today]
   );
+
+  /** 고장·해야할일 한 줄을 임원이 직접 닫는다 */
+  const handleResolve = async (kind, text) => {
+    if (!selectedStatus) return;
+    if (!window.confirm(`"${text}"\n해결된 것으로 처리할까요?`)) return;
+    await resolve(selectedStatus.store.id, kind, text);
+  };
+
+  /**
+   * 마지막 보고를 지운다. 잘못 붙여넣었을 때 쓰는 길이다.
+   * 그 이전 보고까지 손대려면 인수인계 페이지로 간다 — 여기서 과거를 뒤지게 하면 실수가 커진다.
+   */
+  const handleDeleteReport = async () => {
+    if (!selectedStatus?.lastHandoffId) return;
+    const label = selectedStatus.lastDateKey || '';
+    if (!window.confirm(`${selectedStatus.store.name} ${label} 보고를 지울까요?\n되돌릴 수 없습니다.`)) {
+      return;
+    }
+    await removeHandoff(selectedStatus.store.id, selectedStatus.lastHandoffId);
+    setSelected(null);
+  };
 
   const handleCopyReorder = () => {
     if (!selectedStatus || !selectedStock) return;
@@ -280,12 +302,18 @@ export default function Dashboard() {
             <DetailSection
               title="🔧 미해결 고장"
               items={selectedStatus.faults}
+              resolved={selectedStatus.resolvedFaults}
               empty="없음"
+              onResolve={(t) => handleResolve('fault', t)}
+              onUndo={unresolve}
             />
             <DetailSection
               title="🗒️ 미해결 해야할일"
               items={selectedStatus.todos}
+              resolved={selectedStatus.resolvedTodos}
               empty="없음"
+              onResolve={(t) => handleResolve('todo', t)}
+              onUndo={unresolve}
             />
 
             {selectedStatus.tempFlags.length > 0 && (
@@ -301,6 +329,11 @@ export default function Dashboard() {
 
             <div className="modal-actions store-modal-actions">
               <button className="btn-secondary" onClick={() => setSelected(null)}>닫기</button>
+              {selectedStatus.lastHandoffId && (
+                <button className="btn-sm btn-danger" onClick={handleDeleteReport}>
+                  🗑 {selectedStatus.lastDateKey} 보고 삭제
+                </button>
+              )}
               <button
                 className="btn-primary"
                 onClick={() => navigate(`/store/${selectedStatus.store.id}/board/handoff`)}
@@ -315,7 +348,8 @@ export default function Dashboard() {
   );
 }
 
-function DetailSection({ title, items, empty }) {
+function DetailSection({ title, items, resolved, empty, onResolve, onUndo }) {
+  const closed = resolved || [];
   return (
     <div className="store-modal-section">
       <div className="store-modal-label">{title}</div>
@@ -332,7 +366,36 @@ function DetailSection({ title, items, empty }) {
               <span className="order-quick-tags">
                 <AgeTag age={it.age} />
                 <RepeatTag count={it.count} changed={it.changed} />
+                {onResolve && (
+                  <button
+                    className="btn-resolve"
+                    title="현장에서 고쳤으면 여기서 닫는다"
+                    onClick={() => onResolve(it.text)}
+                  >
+                    ✓ 해결
+                  </button>
+                )}
               </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {closed.length > 0 && (
+        <ul className="order-quick-list resolved-list">
+          {closed.map((it, i) => (
+            <li key={i} className="order-quick-item resolved-item">
+              <span className="item-main">
+                <span className="resolved-text">{it.text}</span>
+                <span className="item-variants">
+                  해결 처리됨 · 매장이 다시 올리면 되살아납니다
+                </span>
+              </span>
+              {onUndo && it.resolution?.id && (
+                <button className="btn-undo" onClick={() => onUndo(it.resolution.id)}>
+                  되돌리기
+                </button>
+              )}
             </li>
           ))}
         </ul>

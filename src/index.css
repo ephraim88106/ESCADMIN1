@@ -2892,3 +2892,43 @@ body {
   color: var(--text-muted);
   word-break: break-word;
 }
+
+/* 임원이 직접 닫는 버튼. 목록 안에서 눌러야 하니 작게. */
+.btn-resolve {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated, #fff);
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-resolve:hover {
+  border-color: #16a34a;
+  color: #16a34a;
+}
+
+.resolved-list {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+.resolved-item {
+  opacity: 0.65;
+}
+
+.resolved-text {
+  text-decoration: line-through;
+}
+
+.btn-undo {
+  border: none;
+  background: none;
+  color: var(--accent, #2563eb);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}

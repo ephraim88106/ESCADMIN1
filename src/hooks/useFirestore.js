@@ -319,7 +319,89 @@ export function useAllHandoffs() {
       ? (byStore[storeId] || []).find((h) => h.parsed?.dateKey === dateKey) || null
       : null;
 
-  return { byStore, loading, upsertHandoff, findSameDay };
+  /**
+   * 보고 한 건을 지운다.
+   * 붙여넣기는 대시보드에서 하는데 삭제 버튼은 매장별 인수인계 페이지에만 있었다.
+   * 잘못 붙여넣었을 때 네 단계를 이동해야 지울 수 있어서, 입력한 자리에서 바로 지우게 한다.
+   */
+  const removeHandoff = async (storeId, id) => {
+    if (isFirebaseConfigured) {
+      return deleteDoc(doc(db, 'handoffs', id));
+    }
+    const key = `handoffs_${storeId}`;
+    setLocalData(
+      key,
+      getLocalData(key).filter((h) => h.id !== id)
+    );
+    refreshLocal();
+  };
+
+  return { byStore, loading, upsertHandoff, findSameDay, removeHandoff };
+}
+
+/**
+ * 임원이 직접 닫은 고장·해야할일.
+ *
+ * v3 규칙은 "매장이 다음 문자에서 그 줄을 빼면 해결"이다. 그런데 임원이 현장에서
+ * 고쳐놓고도 매장 문자를 기다려야 목록이 줄어드는 게 실제 불편이었다.
+ * 이 컬렉션은 그 기다림을 건너뛰기 위한 것이고, 판정 규칙 자체를 바꾸지는 않는다.
+ *
+ * 문서 형태: { storeId, kind: 'fault'|'todo', text, resolvedAt, resolvedBy }
+ */
+function resolutionsToMap(list) {
+  const map = {};
+  for (const store of STORES) map[store.id] = [];
+  for (const r of list) {
+    if (!map[r.storeId]) map[r.storeId] = [];
+    map[r.storeId].push(r);
+  }
+  return map;
+}
+
+export function useResolutions() {
+  const localKey = 'resolutions';
+  // Firebase 를 안 쓰는 환경에서는 첫 렌더에 바로 채운다.
+  // 이걸 effect 안에서 하면 불필요한 재렌더가 한 번 더 돈다.
+  const [byStore, setByStore] = useState(() =>
+    isFirebaseConfigured ? {} : resolutionsToMap(getLocalData('resolutions'))
+  );
+
+  const refreshLocal = useCallback(() => {
+    setByStore(resolutionsToMap(getLocalData(localKey)));
+  }, [localKey]);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    const unsub = onSnapshot(collection(db, 'resolutions'), (snapshot) => {
+      setByStore(resolutionsToMap(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    });
+    return unsub;
+  }, []);
+
+  const resolve = async (storeId, kind, text) => {
+    const entry = { storeId, kind, text, resolvedAt: Date.now(), resolvedBy: '임원' };
+    if (isFirebaseConfigured) {
+      return addDoc(collection(db, 'resolutions'), entry);
+    }
+    const list = getLocalData(localKey);
+    list.push({ id: generateId(), ...entry });
+    setLocalData(localKey, list);
+    refreshLocal();
+  };
+
+  /** 잘못 눌렀을 때 되돌린다 */
+  const unresolve = async (id) => {
+    if (isFirebaseConfigured) {
+      return deleteDoc(doc(db, 'resolutions', id));
+    }
+    setLocalData(
+      localKey,
+      getLocalData(localKey).filter((r) => r.id !== id)
+    );
+    refreshLocal();
+  };
+
+  return { byStore, resolve, unresolve };
 }
 
 /**
