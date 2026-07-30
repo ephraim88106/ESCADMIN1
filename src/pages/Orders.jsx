@@ -47,7 +47,7 @@ export default function Orders() {
   };
 
   const handleClearCompleted = async () => {
-    if (!window.confirm('완료된 주문을 모두 삭제하시겠습니까?')) return;
+    if (!window.confirm(`완료된 주문 ${completed.length}건을 지웁니다.`)) return;
     for (const o of completed) {
       await removeOrder(o.id);
     }
@@ -110,7 +110,7 @@ export default function Orders() {
               <div className="orders-section-title">
                 ✅ 완료
                 <button className="btn-sm btn-danger" style={{ marginLeft: 'auto' }} onClick={handleClearCompleted}>
-                  전체 삭제
+                  전체 삭제 ({completed.length})
                 </button>
               </div>
               <div className="orders-list">

@@ -172,7 +172,14 @@ export default function Handoff() {
   };
 
   const handleClearHistory = async () => {
-    if (!window.confirm('확인 완료된 기록을 모두 삭제하시겠습니까?')) return;
+    // 몇 건이 지워지는지 안 보여주면 무엇을 잃는지 모르고 누른다
+    if (
+      !window.confirm(
+        `${store.name} 확인 완료 기록 ${history.length}건을 지웁니다.\n휴지통에서 되살릴 수 있습니다.`
+      )
+    ) {
+      return;
+    }
     for (const h of history) {
       await removeHandoff(h.id);
     }
@@ -512,7 +519,7 @@ export default function Handoff() {
               <div className="history-header">
                 <h3>이전 기록</h3>
                 <button className="btn-sm btn-danger" onClick={handleClearHistory}>
-                  전체 삭제
+                  전체 삭제 ({history.length})
                 </button>
               </div>
               {history.map((h) => (

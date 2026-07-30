@@ -29,6 +29,47 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
+/**
+ * 삭제 전에 원본을 휴지통에 넣는다.
+ *
+ * 2026-07-30: 보고 11건이 사라졌고, 무엇이 지웠는지 끝내 특정하지 못했다.
+ * Firestore 삭제는 되돌릴 수 없고 무료 요금제에는 복구 기능이 없다.
+ * 확인창을 강화하는 것만으로는 개별 삭제로 잃는 걸 못 막는다 —
+ * 지우기 전에 사본을 남기는 쪽이 유일하게 확실하다.
+ *
+ * undefined 는 Firestore 가 거부하므로 JSON 왕복으로 털어낸다.
+ */
+/**
+ * localStorage 폴백에는 onSnapshot 같은 알림이 없다.
+ * archive() 는 useTrash 바깥에서 쓰기 때문에, 알려주지 않으면 휴지통이 갱신되지 않는다.
+ */
+const TRASH_EVENT = 'esc:trash-changed';
+const HANDOFF_EVENT = 'esc:handoffs-changed';
+
+function notify(name) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(name));
+}
+
+const notifyTrash = () => notify(TRASH_EVENT);
+const notifyHandoffs = () => notify(HANDOFF_EVENT);
+
+async function archive(kind, payload) {
+  if (!payload) return;
+  const entry = {
+    kind,
+    deletedAt: Date.now(),
+    payload: JSON.parse(JSON.stringify(payload)),
+  };
+  if (isFirebaseConfigured) {
+    await addDoc(collection(db, 'trash'), entry);
+    return;
+  }
+  const list = getLocalData('trash');
+  list.push({ id: generateId(), ...entry });
+  setLocalData('trash', list);
+  notifyTrash();
+}
+
 export function useEmployees(storeId) {
   const localKey = `employees_${storeId}`;
   const [employees, setEmployees] = useState([]);
@@ -176,7 +217,8 @@ export function useHandoffs(storeId) {
 
     if (!isFirebaseConfigured) {
       refreshLocal();
-      return;
+      window.addEventListener(HANDOFF_EVENT, refreshLocal);
+      return () => window.removeEventListener(HANDOFF_EVENT, refreshLocal);
     }
 
     const q = query(
@@ -218,6 +260,7 @@ export function useHandoffs(storeId) {
   };
 
   const removeHandoff = async (id) => {
+    await archive('handoff', handoffs.find((h) => h.id === id));
     if (isFirebaseConfigured) {
       return deleteDoc(doc(db, 'handoffs', id));
     }
@@ -251,7 +294,8 @@ export function useAllHandoffs() {
   useEffect(() => {
     if (!isFirebaseConfigured) {
       refreshLocal();
-      return;
+      window.addEventListener(HANDOFF_EVENT, refreshLocal);
+      return () => window.removeEventListener(HANDOFF_EVENT, refreshLocal);
     }
     const unsub = onSnapshot(collection(db, 'handoffs'), (snapshot) => {
       const map = {};
@@ -325,6 +369,7 @@ export function useAllHandoffs() {
    * 잘못 붙여넣었을 때 네 단계를 이동해야 지울 수 있어서, 입력한 자리에서 바로 지우게 한다.
    */
   const removeHandoff = async (storeId, id) => {
+    await archive('handoff', (byStore[storeId] || []).find((h) => h.id === id));
     if (isFirebaseConfigured) {
       return deleteDoc(doc(db, 'handoffs', id));
     }
@@ -348,6 +393,65 @@ export function useAllHandoffs() {
  *
  * 문서 형태: { storeId, kind: 'fault'|'todo', text, resolvedAt, resolvedBy }
  */
+/**
+ * 휴지통. 지운 보고를 되살리는 유일한 경로다.
+ * 오래된 건 주인님이 직접 비우게 둔다 — 자동으로 지우면 휴지통이 있는 의미가 없다.
+ */
+export function useTrash() {
+  const [items, setItems] = useState(() =>
+    isFirebaseConfigured
+      ? []
+      : getLocalData('trash').slice().sort((a, b) => b.deletedAt - a.deletedAt)
+  );
+
+  const refreshLocal = useCallback(() => {
+    setItems(getLocalData('trash').slice().sort((a, b) => b.deletedAt - a.deletedAt));
+  }, []);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) {
+      window.addEventListener(TRASH_EVENT, refreshLocal);
+      return () => window.removeEventListener(TRASH_EVENT, refreshLocal);
+    }
+    const unsub = onSnapshot(collection(db, 'trash'), (snapshot) => {
+      setItems(
+        snapshot.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0))
+      );
+    });
+    return unsub;
+  }, [refreshLocal]);
+
+  /** 되살린다. 원래 문서 id 는 버리고 새로 만든다 — 같은 id 를 되쓰려다 충돌내는 게 더 위험하다. */
+  const restore = async (entry) => {
+    if (entry?.kind !== 'handoff' || !entry.payload) return;
+    const { id: _drop, ...body } = entry.payload;
+    if (isFirebaseConfigured) {
+      await addDoc(collection(db, 'handoffs'), body);
+      await deleteDoc(doc(db, 'trash', entry.id));
+      return;
+    }
+    const key = `handoffs_${body.storeId}`;
+    const list = getLocalData(key);
+    list.push({ id: generateId(), ...body });
+    setLocalData(key, list);
+    setLocalData('trash', getLocalData('trash').filter((t) => t.id !== entry.id));
+    notifyTrash();
+    notifyHandoffs();
+  };
+
+  const purge = async (id) => {
+    if (isFirebaseConfigured) {
+      return deleteDoc(doc(db, 'trash', id));
+    }
+    setLocalData('trash', getLocalData('trash').filter((t) => t.id !== id));
+    notifyTrash();
+  };
+
+  return { items, restore, purge };
+}
+
 function resolutionsToMap(list) {
   const map = {};
   for (const store of STORES) map[store.id] = [];

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { STORES } from '../data/stores';
-import { useAllHandoffs, useNotices, useItems, useResolutions } from '../hooks/useFirestore';
+import { useAllHandoffs, useNotices, useItems, useResolutions, useTrash } from '../hooks/useFirestore';
 import { buildPatrolList, summarize, todayKey, THRESHOLDS } from '../lib/patrol';
 import { buildStoreReorder, storeReorderToText, waitLabel } from '../lib/stock';
 import { buildAliasMap } from '../lib/itemName';
@@ -46,18 +46,23 @@ function Variants({ list, current }) {
   return <span className="item-variants">묶임 · {others.join(' / ')}</span>;
 }
 
+function storeName(id) {
+  return STORES.find((s) => s.id === id)?.name || id || '매장 모름';
+}
+
 /** 등록 시각. 같은 날 두 번 넣었을 때 어느 게 나중 것인지 구분하려면 시각이 필요하다. */
-function formatStamp(ms) {
-  if (!ms) return '등록 시각 모름';
+function formatStamp(ms, what = '등록') {
+  if (!ms) return `${what} 시각 모름`;
   const d = new Date(ms);
   const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())} 등록`;
+  return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())} ${what}`;
 }
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { byStore, loading, upsertHandoff, findSameDay, removeHandoff } = useAllHandoffs();
   const { byStore: resolutionsByStore, resolve, unresolve } = useResolutions();
+  const { items: trash, restore, purge } = useTrash();
   const { notices } = useNotices();
   const { items: master } = useItems();
   const [showPaste, setShowPaste] = useState(false);
@@ -65,6 +70,7 @@ export default function Dashboard() {
   const [showAll, setShowAll] = useState(false);
   // 삭제가 실패해도 지금까지는 화면에 아무 표시가 없었다 → "눌렀는데 안 되네"가 됐다
   const [deleteError, setDeleteError] = useState(null);
+  const [showTrash, setShowTrash] = useState(false);
 
   const today = todayKey();
   const patrol = useMemo(
@@ -148,6 +154,41 @@ export default function Dashboard() {
 
       {showPaste && (
         <PasteBox upsertHandoff={upsertHandoff} findSameDay={findSameDay} />
+      )}
+
+      {trash.length > 0 && (
+        <div className="trash-box">
+          <button className="trash-toggle" onClick={() => setShowTrash((v) => !v)}>
+            🗑 휴지통 {trash.length}건 {showTrash ? '▲' : '▼'}
+          </button>
+          {showTrash && (
+            <ul className="order-quick-list">
+              {trash.map((t) => (
+                <li key={t.id} className="order-quick-item">
+                  <span className="item-main">
+                    <span>
+                      {storeName(t.payload?.storeId)} {t.payload?.parsed?.dateKey || ''}
+                    </span>
+                    <span className="item-variants">{formatStamp(t.deletedAt, '삭제')}</span>
+                  </span>
+                  <span className="order-quick-tags">
+                    <button className="btn-sm btn-restore" onClick={() => restore(t)}>
+                      되살리기
+                    </button>
+                    <button
+                      className="btn-sm btn-danger"
+                      onClick={() => {
+                        if (window.confirm('완전히 지웁니다. 이건 되돌릴 수 없습니다.')) purge(t.id);
+                      }}
+                    >
+                      완전삭제
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       <div className="summary-cards">

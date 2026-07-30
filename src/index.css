@@ -2964,3 +2964,33 @@ body {
   white-space: nowrap;
   align-self: flex-start;
 }
+
+.trash-box {
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--bg-subtle, #f8fafc);
+}
+
+.trash-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+/* .btn-sm 이 .btn-primary 보다 뒤에 있어 배경을 덮어쓴다.
+   두 클래스를 겹쳐 쓰면 흰 글씨가 흰 배경에 얹혀 버튼이 안 보인다. */
+.btn-restore {
+  border-color: var(--accent, #2563eb);
+  color: var(--accent, #2563eb);
+  font-weight: 600;
+}
+
+.btn-restore:hover {
+  background: #eff6ff;
+}
