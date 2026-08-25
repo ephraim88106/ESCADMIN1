@@ -320,7 +320,7 @@ export default function Dashboard() {
                         {seat.text}
                         {seat.memo && <span className="item-variants">{seat.memo}</span>}
                       </span>
-                      {seat.date && <span className="need-stock">마치는 날 {seat.date}</span>}
+                      {seat.date && <span className="need-stock">{seat.date}</span>}
                     </li>
                   ))}
                 </ul>
