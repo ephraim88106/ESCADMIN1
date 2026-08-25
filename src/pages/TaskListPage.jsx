@@ -18,7 +18,7 @@ function SeatSection({ storeId }) {
   const handleAdd = async () => {
     const text = newSeat.trim();
     if (!text) return;
-    await addSeat({ text, memo: '', date: todayStr() });
+    await addSeat({ text, memo: '', startDate: todayStr(), date: '' });
     setNewSeat('');
   };
 
@@ -28,6 +28,10 @@ function SeatSection({ storeId }) {
 
   const handleMemoChange = async (id, memo) => {
     await updateSeat(id, { memo });
+  };
+
+  const handleStartDateChange = async (id, startDate) => {
+    await updateSeat(id, { startDate });
   };
 
   const handleDateChange = async (id, date) => {
@@ -66,6 +70,13 @@ function SeatSection({ storeId }) {
                 value={seat.memo || ''}
                 onChange={(e) => handleMemoChange(seat.id, e.target.value)}
               />
+              <input
+                type="date"
+                className="task-date"
+                value={seat.startDate || ''}
+                onChange={(e) => handleStartDateChange(seat.id, e.target.value)}
+              />
+              <span className="seat-date-sep">~</span>
               <input
                 type="date"
                 className="task-date"

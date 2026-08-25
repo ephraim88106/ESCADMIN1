@@ -317,7 +317,11 @@ export default function Dashboard() {
                   {selectedSeats.map((seat) => (
                     <li key={seat.id} className="order-quick-item">
                       <span>{seat.text}</span>
-                      {seat.date && <span className="need-stock">{seat.date}</span>}
+                      {(seat.startDate || seat.date) && (
+                        <span className="need-stock">
+                          {seat.startDate || '?'} ~ {seat.date || '?'}
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
