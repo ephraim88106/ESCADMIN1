@@ -23,8 +23,9 @@ function monthlyCheckBadgeClass(days) {
 }
 
 function MonthlyCheckSection({ storeId }) {
-  const { tasks: items, loading, addTask, updateTask } = useTaskList(storeId, 'monthlyCheck');
+  const { tasks: items, loading, addTask, updateTask, removeTask } = useTaskList(storeId, 'monthlyCheck');
   const seeded = useRef(false);
+  const [newText, setNewText] = useState('');
 
   useEffect(() => {
     if (loading || seeded.current || items.length > 0) return;
@@ -36,11 +37,41 @@ function MonthlyCheckSection({ storeId }) {
     await updateTask(id, { lastCheckedAt: lastCheckedAt ? null : nowMs() });
   };
 
+  const handleAdd = async () => {
+    const text = newText.trim();
+    if (!text) return;
+    await addTask({ text, lastCheckedAt: null });
+    setNewText('');
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleAdd();
+  };
+
+  const handleRemove = async (id) => {
+    await removeTask(id);
+  };
+
   return (
     <div className="task-section">
-      <div className="task-section-title">🗓️ 월간 점검 (담요·제빙기, 한 달에 한 번)</div>
-      {loading || items.length === 0 ? (
+      <div className="task-section-title">🗓️ 월간 점검 (한 달에 한 번)</div>
+
+      <div className="task-add-row">
+        <input
+          type="text"
+          className="task-add-input"
+          placeholder="점검 항목 추가..."
+          value={newText}
+          onChange={(e) => setNewText(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        <button className="btn-primary" onClick={handleAdd}>추가</button>
+      </div>
+
+      {loading ? (
         <p className="loading">불러오는 중...</p>
+      ) : items.length === 0 ? (
+        <p className="empty-hint">항목이 없습니다.</p>
       ) : (
         <div className="task-list">
           {items.map((item) => {
@@ -54,6 +85,7 @@ function MonthlyCheckSection({ storeId }) {
                 <button className="btn-primary btn-sm" onClick={() => handleCheck(item.id, item.lastCheckedAt)}>
                   {item.lastCheckedAt ? '체크 취소' : '체크 완료'}
                 </button>
+                <button className="task-delete" onClick={() => handleRemove(item.id)}>✕</button>
               </div>
             );
           })}
