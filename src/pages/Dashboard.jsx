@@ -156,8 +156,8 @@ export default function Dashboard() {
     updateTask: updateMonthlyCheck,
   } = useTaskList(selected, 'monthlyCheck');
 
-  const handleMonthlyCheck = async (id) => {
-    await updateMonthlyCheck(id, { lastCheckedAt: nowMs() });
+  const handleMonthlyCheck = async (id, lastCheckedAt) => {
+    await updateMonthlyCheck(id, { lastCheckedAt: lastCheckedAt ? null : nowMs() });
   };
 
   const aliasMap = useMemo(() => buildAliasMap(master), [master]);
@@ -416,9 +416,9 @@ export default function Dashboard() {
                           </span>
                           <button
                             className="btn-resolve"
-                            onClick={() => handleMonthlyCheck(item.id)}
+                            onClick={() => handleMonthlyCheck(item.id, item.lastCheckedAt)}
                           >
-                            ✓ 체크
+                            {item.lastCheckedAt ? '체크 취소' : '✓ 체크'}
                           </button>
                         </span>
                       </li>

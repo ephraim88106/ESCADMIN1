@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { getStoreById } from '../data/stores';
 import { useTaskList } from '../hooks/useFirestore';
 
-const MONTHLY_CHECK_ITEMS = ['담요', '제빙기', '비정기리스트 확인'];
+const MONTHLY_CHECK_ITEMS = ['담요', '제빙기'];
 
 function nowMs() {
   return Date.now();
@@ -32,13 +32,13 @@ function MonthlyCheckSection({ storeId }) {
     MONTHLY_CHECK_ITEMS.forEach((text) => addTask({ text, lastCheckedAt: null }));
   }, [loading, items.length, addTask]);
 
-  const handleCheck = async (id) => {
-    await updateTask(id, { lastCheckedAt: nowMs() });
+  const handleCheck = async (id, lastCheckedAt) => {
+    await updateTask(id, { lastCheckedAt: lastCheckedAt ? null : nowMs() });
   };
 
   return (
     <div className="task-section">
-      <div className="task-section-title">🗓️ 월간 점검 (담요·제빙기·비정기리스트, 한 달에 한 번)</div>
+      <div className="task-section-title">🗓️ 월간 점검 (담요·제빙기, 한 달에 한 번)</div>
       {loading || items.length === 0 ? (
         <p className="loading">불러오는 중...</p>
       ) : (
@@ -51,8 +51,8 @@ function MonthlyCheckSection({ storeId }) {
                 <span className={`seat-days-badge ${monthlyCheckBadgeClass(days)}`}>
                   {days === null ? '미체크' : days === 0 ? '오늘 체크' : `${days}일 전`}
                 </span>
-                <button className="btn-primary btn-sm" onClick={() => handleCheck(item.id)}>
-                  체크 완료
+                <button className="btn-primary btn-sm" onClick={() => handleCheck(item.id, item.lastCheckedAt)}>
+                  {item.lastCheckedAt ? '체크 취소' : '체크 완료'}
                 </button>
               </div>
             );
