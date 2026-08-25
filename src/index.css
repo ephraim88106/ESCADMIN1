@@ -2914,6 +2914,39 @@ body {
   background: #2563eb;
 }
 
+.empty-seat-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 7px;
+  flex-shrink: 0;
+}
+
+.empty-seat-1 {
+  background: #1f2937;
+}
+
+.empty-seat-2 {
+  background: #2563eb;
+}
+
+.empty-seat-3 {
+  background: #16a34a;
+}
+
+.empty-seat-4 {
+  background: #ca8a04;
+}
+
+.empty-seat-5 {
+  background: #ea580c;
+}
+
+.empty-seat-6 {
+  background: #dc2626;
+}
+
 .urgent-badge {
   font-size: 10px;
   font-weight: 700;

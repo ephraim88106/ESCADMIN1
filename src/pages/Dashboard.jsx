@@ -40,6 +40,15 @@ function seatDaysBadgeClass(days) {
   return 'seat-days-blue';
 }
 
+function emptySeatBadgeClass(count) {
+  if (count <= 1) return 'empty-seat-1';
+  if (count === 2) return 'empty-seat-2';
+  if (count === 3) return 'empty-seat-3';
+  if (count === 4) return 'empty-seat-4';
+  if (count === 5) return 'empty-seat-5';
+  return 'empty-seat-6';
+}
+
 function AgeTag({ age }) {
   const cls = age >= THRESHOLDS.staleDays ? 'age-tag stale' : 'age-tag';
   return <span className={cls}>{age}일</span>;
@@ -433,6 +442,28 @@ export default function Dashboard() {
               onResolve={(t) => handleResolve('fault', t)}
               onUndo={unresolve}
             />
+
+            <div className="store-modal-section">
+              <div className="store-modal-label">🪑 빈자리</div>
+              {selectedStatus.emptySeats.length === 0 ? (
+                <p className="store-modal-empty">없음</p>
+              ) : (
+                <ul className="order-quick-list">
+                  {selectedStatus.emptySeats.map((it, i) => (
+                    <li key={i} className="order-quick-item">
+                      <span className="item-main">
+                        {it.text}
+                        <Variants list={it.variants} current={it.text} />
+                      </span>
+                      <span className={`empty-seat-badge ${emptySeatBadgeClass(it.count)}`}>
+                        {it.count}회
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <DetailSection
               title="🗒️ 미해결 해야할일"
               items={selectedStatus.todos}

@@ -264,6 +264,8 @@ export function buildStoreStatus(store, handoffs, today, resolutions = []) {
 
   const faults = withAge(openFaults);
   const todos = withAge(openTodos);
+  // 며칠째 이 자리가 비어있는지도 같은 엔진으로 센다. 임원이 닫는 개념이 아니라 해결 필터는 안 씌운다.
+  const emptySeats = withAge(trackOpenItems(reports, (p) => p.emptySeats || []));
   // 닫은 항목도 화면에 남긴다. 잘못 눌렀을 때 되돌릴 수 있어야 한다.
   const resolvedFaults = withAge(faultSplit.resolved);
   const resolvedTodos = withAge(todoSplit.resolved);
@@ -344,6 +346,7 @@ export function buildStoreStatus(store, handoffs, today, resolutions = []) {
     lastHandoffId: last?.handoff?.id ?? null,
     faults,
     todos,
+    emptySeats,
     resolvedFaults,
     resolvedTodos,
     orders,
