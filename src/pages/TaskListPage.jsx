@@ -1,7 +1,67 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getStoreById } from '../data/stores';
 import { useTaskList } from '../hooks/useFirestore';
+
+const MONTHLY_CHECK_ITEMS = ['담요', '제빙기', '비정기리스트 확인'];
+
+function nowMs() {
+  return Date.now();
+}
+
+function daysSinceCheck(ms) {
+  if (!ms) return null;
+  return Math.floor((Date.now() - ms) / 86400000);
+}
+
+function monthlyCheckBadgeClass(days) {
+  if (days === null || days >= 30) return 'seat-days-red';
+  if (days >= 20) return 'seat-days-orange';
+  if (days >= 10) return 'seat-days-yellow';
+  if (days >= 1) return 'seat-days-green';
+  return 'seat-days-blue';
+}
+
+function MonthlyCheckSection({ storeId }) {
+  const { tasks: items, loading, addTask, updateTask } = useTaskList(storeId, 'monthlyCheck');
+  const seeded = useRef(false);
+
+  useEffect(() => {
+    if (loading || seeded.current || items.length > 0) return;
+    seeded.current = true;
+    MONTHLY_CHECK_ITEMS.forEach((text) => addTask({ text, lastCheckedAt: null }));
+  }, [loading, items.length, addTask]);
+
+  const handleCheck = async (id) => {
+    await updateTask(id, { lastCheckedAt: nowMs() });
+  };
+
+  return (
+    <div className="task-section">
+      <div className="task-section-title">🗓️ 월간 점검 (담요·제빙기·비정기리스트, 한 달에 한 번)</div>
+      {loading || items.length === 0 ? (
+        <p className="loading">불러오는 중...</p>
+      ) : (
+        <div className="task-list">
+          {items.map((item) => {
+            const days = daysSinceCheck(item.lastCheckedAt);
+            return (
+              <div key={item.id} className="task-item">
+                <span className="task-text">{item.text}</span>
+                <span className={`seat-days-badge ${monthlyCheckBadgeClass(days)}`}>
+                  {days === null ? '미체크' : days === 0 ? '오늘 체크' : `${days}일 전`}
+                </span>
+                <button className="btn-primary btn-sm" onClick={() => handleCheck(item.id)}>
+                  체크 완료
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function todayStr() {
   const d = new Date();
@@ -209,6 +269,7 @@ export default function TaskListPage() {
   return (
     <div className="tasklist-page">
       <SeatSection storeId={storeId} />
+      <MonthlyCheckSection storeId={storeId} />
       <TaskSection title="정기리스트" icon="📅" storeId={storeId} type="regular" />
       <TaskSection title="비정기리스트" icon="📋" storeId={storeId} type="irregular" />
     </div>
