@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { STORES } from '../data/stores';
-import { useAllHandoffs, useNotices, useItems, useResolutions, useTrash } from '../hooks/useFirestore';
+import { useAllHandoffs, useNotices, useItems, useResolutions, useTrash, useTaskList } from '../hooks/useFirestore';
 import { buildPatrolList, summarize, todayKey, THRESHOLDS, cardClass } from '../lib/patrol';
 import { buildStoreReorder, storeReorderToText, waitLabel } from '../lib/stock';
 import { buildAliasMap } from '../lib/itemName';
@@ -98,6 +98,8 @@ export default function Dashboard() {
   const selectedStatus = selected
     ? patrol.find((s) => s.store.id === selected) || null
     : null;
+
+  const { tasks: selectedSeats, loading: seatsLoading } = useTaskList(selected, 'seats');
 
   const aliasMap = useMemo(() => buildAliasMap(master), [master]);
   // '지금 시켜야 할 것'은 미도착 발주와 다르다. 재고가 임계치 미만인데 아직 안 시킨 품목.
@@ -302,6 +304,24 @@ export default function Dashboard() {
                   ? `최근 보고 ${selectedStatus.lastDateKey}`
                   : '보고 기록 없음'}
               </span>
+            </div>
+
+            <div className="store-modal-section">
+              <div className="store-modal-label">💺 지정석 목록</div>
+              {seatsLoading ? (
+                <p className="store-modal-empty">불러오는 중...</p>
+              ) : selectedSeats.length === 0 ? (
+                <p className="store-modal-empty">지정석이 없습니다.</p>
+              ) : (
+                <ul className="order-quick-list">
+                  {selectedSeats.map((seat) => (
+                    <li key={seat.id} className="order-quick-item">
+                      <span>{seat.text}</span>
+                      {seat.memo && <span className="item-variants">{seat.memo}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="store-modal-section">
