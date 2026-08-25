@@ -32,6 +32,23 @@ function daysUntilSeatEnd(dateStr) {
   return Math.round((end - today) / 86400000);
 }
 
+function nowMs() {
+  return Date.now();
+}
+
+function daysSinceCheck(ms) {
+  if (!ms) return null;
+  return Math.floor((nowMs() - ms) / 86400000);
+}
+
+function monthlyCheckBadgeClass(days) {
+  if (days === null || days >= 30) return 'seat-days-red';
+  if (days >= 20) return 'seat-days-orange';
+  if (days >= 10) return 'seat-days-yellow';
+  if (days >= 1) return 'seat-days-green';
+  return 'seat-days-blue';
+}
+
 function seatDaysBadgeClass(days) {
   if (days <= 7) return 'seat-days-red';
   if (days <= 14) return 'seat-days-orange';
@@ -133,6 +150,15 @@ export default function Dashboard() {
     : null;
 
   const { tasks: selectedSeats, loading: seatsLoading } = useTaskList(selected, 'seats');
+  const {
+    tasks: selectedMonthlyChecks,
+    loading: monthlyChecksLoading,
+    updateTask: updateMonthlyCheck,
+  } = useTaskList(selected, 'monthlyCheck');
+
+  const handleMonthlyCheck = async (id) => {
+    await updateMonthlyCheck(id, { lastCheckedAt: nowMs() });
+  };
 
   const aliasMap = useMemo(() => buildAliasMap(master), [master]);
   // '지금 시켜야 할 것'은 미도착 발주와 다르다. 재고가 임계치 미만인데 아직 안 시킨 품목.
@@ -363,6 +389,37 @@ export default function Dashboard() {
                               {daysLeft < 0 ? `${-daysLeft}일 지남` : daysLeft === 0 ? '오늘 마감' : `D-${daysLeft}`}
                             </span>
                           )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <div className="store-modal-section">
+              <div className="store-modal-label">🗓️ 월간 점검</div>
+              {monthlyChecksLoading ? (
+                <p className="store-modal-empty">불러오는 중...</p>
+              ) : selectedMonthlyChecks.length === 0 ? (
+                <p className="store-modal-empty">없음</p>
+              ) : (
+                <ul className="order-quick-list">
+                  {selectedMonthlyChecks.map((item) => {
+                    const days = daysSinceCheck(item.lastCheckedAt);
+                    return (
+                      <li key={item.id} className="order-quick-item">
+                        <span>{item.text}</span>
+                        <span className="seat-date-meta">
+                          <span className={`seat-days-badge ${monthlyCheckBadgeClass(days)}`}>
+                            {days === null ? '미체크' : days === 0 ? '오늘 체크' : `${days}일 전`}
+                          </span>
+                          <button
+                            className="btn-resolve"
+                            onClick={() => handleMonthlyCheck(item.id)}
+                          >
+                            ✓ 체크
+                          </button>
                         </span>
                       </li>
                     );
