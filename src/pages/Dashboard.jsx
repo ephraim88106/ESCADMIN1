@@ -16,6 +16,13 @@ const REASON_CLASS = {
   temp: 'reason-temp',
 };
 
+function formatSeatDate(dateStr) {
+  if (!dateStr) return '?';
+  const [y, m, d] = dateStr.split('-');
+  if (!y || !m || !d) return dateStr;
+  return `${y.slice(2)}.${Number(m)}.${Number(d)}`;
+}
+
 function AgeTag({ age }) {
   const cls = age >= THRESHOLDS.staleDays ? 'age-tag stale' : 'age-tag';
   return <span className={cls}>{age}일</span>;
@@ -319,7 +326,7 @@ export default function Dashboard() {
                       <span>{seat.text}</span>
                       {(seat.startDate || seat.date) && (
                         <span className="need-stock">
-                          {seat.startDate || '?'} ~ {seat.date || '?'}
+                          {formatSeatDate(seat.startDate)} - {formatSeatDate(seat.date)}
                         </span>
                       )}
                     </li>
