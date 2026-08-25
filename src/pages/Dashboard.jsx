@@ -23,6 +23,23 @@ function formatSeatDate(dateStr) {
   return `${y.slice(2)}.${Number(m)}.${Number(d)}`;
 }
 
+function daysUntilSeatEnd(dateStr) {
+  if (!dateStr) return null;
+  const end = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(end.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((end - today) / 86400000);
+}
+
+function seatDaysBadgeClass(days) {
+  if (days <= 7) return 'seat-days-red';
+  if (days <= 14) return 'seat-days-orange';
+  if (days <= 30) return 'seat-days-yellow';
+  if (days <= 60) return 'seat-days-green';
+  return 'seat-days-blue';
+}
+
 function AgeTag({ age }) {
   const cls = age >= THRESHOLDS.staleDays ? 'age-tag stale' : 'age-tag';
   return <span className={cls}>{age}일</span>;
@@ -321,16 +338,26 @@ export default function Dashboard() {
                 <p className="store-modal-empty">지정석이 없습니다.</p>
               ) : (
                 <ul className="order-quick-list">
-                  {selectedSeats.map((seat) => (
-                    <li key={seat.id} className="order-quick-item">
-                      <span>{seat.text}</span>
-                      {(seat.startDate || seat.date) && (
-                        <span className="need-stock">
-                          {formatSeatDate(seat.startDate)} - {formatSeatDate(seat.date)}
+                  {selectedSeats.map((seat) => {
+                    const daysLeft = daysUntilSeatEnd(seat.date);
+                    return (
+                      <li key={seat.id} className="order-quick-item">
+                        <span>{seat.text}</span>
+                        <span className="seat-date-meta">
+                          {(seat.startDate || seat.date) && (
+                            <span className="need-stock">
+                              {formatSeatDate(seat.startDate)} - {formatSeatDate(seat.date)}
+                            </span>
+                          )}
+                          {daysLeft !== null && (
+                            <span className={`seat-days-badge ${seatDaysBadgeClass(daysLeft)}`}>
+                              {daysLeft < 0 ? `${-daysLeft}일 지남` : daysLeft === 0 ? '오늘 마감' : `D-${daysLeft}`}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

@@ -2878,6 +2878,42 @@ body {
   color: var(--text-muted);
 }
 
+.seat-date-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.seat-days-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 7px;
+  flex-shrink: 0;
+}
+
+.seat-days-red {
+  background: #dc2626;
+}
+
+.seat-days-orange {
+  background: #ea580c;
+}
+
+.seat-days-yellow {
+  background: #ca8a04;
+}
+
+.seat-days-green {
+  background: #16a34a;
+}
+
+.seat-days-blue {
+  background: #2563eb;
+}
+
 .urgent-badge {
   font-size: 10px;
   font-weight: 700;
