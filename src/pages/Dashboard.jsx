@@ -316,10 +316,7 @@ export default function Dashboard() {
                 <ul className="order-quick-list">
                   {selectedSeats.map((seat) => (
                     <li key={seat.id} className="order-quick-item">
-                      <span className="item-main">
-                        {seat.text}
-                        {seat.memo && <span className="item-variants">{seat.memo}</span>}
-                      </span>
+                      <span>{seat.text}</span>
                       {seat.date && <span className="need-stock">{seat.date}</span>}
                     </li>
                   ))}
