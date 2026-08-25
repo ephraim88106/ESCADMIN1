@@ -14,6 +14,12 @@ function daysSinceCheck(ms) {
   return Math.floor((Date.now() - ms) / 86400000);
 }
 
+function formatCheckedDate(ms) {
+  if (!ms) return null;
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 function monthlyCheckBadgeClass(days) {
   if (days === null || days >= 30) return 'seat-days-red';
   if (days >= 20) return 'seat-days-orange';
@@ -76,11 +82,12 @@ function MonthlyCheckSection({ storeId }) {
         <div className="task-list">
           {items.map((item) => {
             const days = daysSinceCheck(item.lastCheckedAt);
+            const checkedDate = formatCheckedDate(item.lastCheckedAt);
             return (
               <div key={item.id} className="task-item">
                 <span className="task-text">{item.text}</span>
                 <span className={`seat-days-badge ${monthlyCheckBadgeClass(days)}`}>
-                  {days === null ? '미체크' : days === 0 ? '오늘 체크' : `${days}일 전`}
+                  {checkedDate ? `${checkedDate} 체크${days > 0 ? ` (${days}일 전)` : ''}` : '미체크'}
                 </span>
                 <button className="btn-primary btn-sm" onClick={() => handleCheck(item.id, item.lastCheckedAt)}>
                   {item.lastCheckedAt ? '체크 취소' : '체크 완료'}

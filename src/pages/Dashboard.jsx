@@ -41,6 +41,12 @@ function daysSinceCheck(ms) {
   return Math.floor((nowMs() - ms) / 86400000);
 }
 
+function formatCheckedDate(ms) {
+  if (!ms) return null;
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 function monthlyCheckBadgeClass(days) {
   if (days === null || days >= 30) return 'seat-days-red';
   if (days >= 20) return 'seat-days-orange';
@@ -407,12 +413,13 @@ export default function Dashboard() {
                 <ul className="order-quick-list">
                   {selectedMonthlyChecks.map((item) => {
                     const days = daysSinceCheck(item.lastCheckedAt);
+                    const checkedDate = formatCheckedDate(item.lastCheckedAt);
                     return (
                       <li key={item.id} className="order-quick-item">
                         <span>{item.text}</span>
                         <span className="seat-date-meta">
                           <span className={`seat-days-badge ${monthlyCheckBadgeClass(days)}`}>
-                            {days === null ? '미체크' : days === 0 ? '오늘 체크' : `${days}일 전`}
+                            {checkedDate ? `${checkedDate} 체크${days > 0 ? ` (${days}일 전)` : ''}` : '미체크'}
                           </span>
                           <button
                             className="btn-resolve"
