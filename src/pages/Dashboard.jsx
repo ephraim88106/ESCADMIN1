@@ -372,19 +372,6 @@ export default function Dashboard() {
             </div>
 
             <div className="store-modal-section">
-              <div className="store-modal-label">💺 고정석 (오늘 보고)</div>
-              {(selectedStatus.parsed?.fixedSeats || []).length === 0 ? (
-                <p className="store-modal-empty">없음</p>
-              ) : (
-                <ul className="order-quick-list">
-                  {selectedStatus.parsed.fixedSeats.map((seat, i) => (
-                    <li key={i} className="order-quick-item">{seat}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="store-modal-section">
               <div className="store-modal-label">💺 지정석 목록</div>
               {seatsLoading ? (
                 <p className="store-modal-empty">불러오는 중...</p>
