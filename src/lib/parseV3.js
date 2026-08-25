@@ -44,6 +44,13 @@ const HEAD_ALIASES = {
 
 const EMPTY_TOKENS = ['없음', '없슴', '-', '해당없음', 'x', 'X'];
 
+// ■이전주문 아래에 적은 줄은 (이전요청) 을 안 써도 미도착 발주로 쳐준다.
+const PREVIOUS_ORDER_HEADS = ['이전주문', '이전 주문'];
+
+function markPrevious(line) {
+  return /\(\s*이전\s*요청\s*\)/.test(line) ? line : `${line} (이전요청)`;
+}
+
 /**
  * v3 양식인지 판정.
  *
@@ -176,6 +183,7 @@ export function parseV3(text, baseTime = Date.now()) {
 
   let headerLine = '';
   let current = null;
+  let currentIsPreviousOrder = false;
   let zone = '';
 
   for (const rawLine of lines) {
@@ -185,10 +193,14 @@ export function parseV3(text, baseTime = Date.now()) {
     if (line.startsWith('■')) {
       const title = normalizeHead(line);
       current = title ? TITLE_TO_KEY[title] : null;
+      const headText = line.replace(/^■\s*/, '').replace(/[:：]\s*$/, '').trim();
+      currentIsPreviousOrder = current === 'orders' && PREVIOUS_ORDER_HEADS.includes(headText);
       zone = '';
       // "■고장 없음" 처럼 같은 줄에 값이 붙은 경우
       const inline = line.replace(/^■\s*[^\s]*/, '').trim();
-      if (current && inline && !isEmptyToken(inline)) raw[current].push(inline);
+      if (current && inline && !isEmptyToken(inline)) {
+        raw[current].push(currentIsPreviousOrder ? markPrevious(inline) : inline);
+      }
       continue;
     }
 
@@ -204,7 +216,11 @@ export function parseV3(text, baseTime = Date.now()) {
       continue;
     }
 
-    raw[current].push(current === 'temps' ? { zone, text: line } : line);
+    if (current === 'temps') {
+      raw[current].push({ zone, text: line });
+    } else {
+      raw[current].push(currentIsPreviousOrder ? markPrevious(line) : line);
+    }
   }
 
   const header = parseHeader(headerLine);
