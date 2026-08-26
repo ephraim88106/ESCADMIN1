@@ -148,7 +148,7 @@ export default function Dashboard() {
   const { items: master } = useItems();
   const [showPaste, setShowPaste] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(true);
   // 삭제가 실패해도 지금까지는 화면에 아무 표시가 없었다 → "눌렀는데 안 되네"가 됐다
   const [deleteError, setDeleteError] = useState(null);
   const [showTrash, setShowTrash] = useState(false);
