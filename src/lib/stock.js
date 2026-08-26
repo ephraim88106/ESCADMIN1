@@ -15,7 +15,7 @@
 // 임계치는 발주 판정에 쓰지 않고, 매트릭스에서 '재고가 적다'를 색으로 보여주는 데만 쓴다.
 // 재고가 바닥인데 담당자가 ■주문에 안 적었다면 목록에 뜨지 않는다 — 문자가 기준이다.
 
-import { foldByDate, trackOpenItems, daysBetween, todayKey } from './patrol';
+import { foldByDate, trackOpenItems, daysBetween, todayKey, applyResolutions } from './patrol';
 import { canonicalName, itemThreshold } from './itemName';
 
 export const DEFAULT_THRESHOLD = 2;
@@ -62,6 +62,8 @@ export function buildStoreStock(handoffs, aliasMap, today) {
     const age = from ? daysBetween(from, today) : o.previous ? null : 0;
     return {
       name,
+      // 발주완료 처리 매칭용. 대표 품목명을 키로 쓴다 — 담당자가 표현을 조금씩 바꿔도 같은 건으로 묶인다.
+      text: name,
       raw: o.name,
       qty: o.qty,
       unit: o.unit || '',
@@ -70,6 +72,7 @@ export function buildStoreStock(handoffs, aliasMap, today) {
       count: t?.count ?? 1,
       changed: !!t?.changed,
       variants: t?.variants ?? [o.name],
+      lastAt: t?.lastAt ?? null,
       age,
     };
   };
@@ -179,15 +182,21 @@ export function buildStockView(stores, handoffsByStore, items, aliasMap, today =
  * 미도착 발주(이미 시켰는데 안 온 것)와는 다르다.
  * 여기 나오는 건 재고가 임계치 미만인데 아직 주문 줄에 없는 품목이다.
  */
-export function buildStoreReorder(handoffs, aliasMap, today = todayKey()) {
+export function buildStoreReorder(handoffs, aliasMap, today = todayKey(), resolutions = []) {
   const info = buildStoreStock(handoffs, aliasMap, today);
   // 문자의 ■주문 그대로. 남은 재고는 양쪽 모두에 붙인다 —
   // 안 온 발주도 재고가 0이면 더 급하다.
   const withStock = (o) => ({ ...o, stock: info.stock.get(o.name)?.qty ?? null });
+  // 임원이 발주완료 처리한 품목은 뺀다. 매장이 다시 올리면(재요청) 되살아난다 —
+  // 고장·해야할일과 같은 정책.
+  const needOrderSplit = applyResolutions(info.newOrders.map(withStock), resolutions, 'order');
+  const prevOrdersSplit = applyResolutions(info.prevOrders.map(withStock), resolutions, 'order');
   return {
     ...info,
-    needOrder: info.newOrders.map(withStock),
-    prevOrders: info.prevOrders.map(withStock),
+    needOrder: needOrderSplit.open,
+    prevOrders: prevOrdersSplit.open,
+    resolvedNeedOrder: needOrderSplit.resolved,
+    resolvedPrevOrders: prevOrdersSplit.resolved,
   };
 }
 

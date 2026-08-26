@@ -80,9 +80,27 @@ function AgeTag({ age }) {
 /**
  * 같은 항목이 몇 번의 보고에 올라왔는지.
  * 칸을 늘리지 않고 한 줄로 접되, 얼마나 되풀이됐는지는 이 배지로 보여준다.
+ *
+ * mode="order" 일 때는 "+N"이 아니라 "N회차 보고"로 적는다.
+ * 발주 항목은 바로 옆에 수량(개수)이 붙기 때문에 "+2"를 보면
+ * '2개 더'로 오해하기 쉽다 — 실제로는 이틀 연속 같은 걸 올렸다는 뜻이다.
+ * 1회차(처음 올라온 것)는 되풀이가 아니므로 표시하지 않는다.
  */
-function RepeatTag({ count, changed }) {
+function RepeatTag({ count, changed, mode }) {
   if (!count) return null;
+  if (mode === 'order') {
+    if (count < 2) return null;
+    const cls = count >= 3 ? 'repeat-tag hot' : 'repeat-tag';
+    return (
+      <span
+        className={cls}
+        title={changed ? '문구가 바뀌었지만 같은 건으로 이어붙였습니다' : `${count}번째 보고에 올라옴`}
+      >
+        {count}회차 보고
+        {changed && <span className="repeat-changed">✎</span>}
+      </span>
+    );
+  }
   const cls = count >= 3 ? 'repeat-tag hot' : 'repeat-tag';
   return (
     <span className={cls} title={changed ? '문구가 바뀌었지만 같은 건으로 이어붙였습니다' : `${count}번 올라옴`}>
@@ -130,9 +148,10 @@ export default function Dashboard() {
   const [showTrash, setShowTrash] = useState(false);
 
   const today = todayKey();
+  const aliasMap = useMemo(() => buildAliasMap(master), [master]);
   const patrol = useMemo(
-    () => buildPatrolList(STORES, byStore, today, resolutionsByStore),
-    [byStore, today, resolutionsByStore]
+    () => buildPatrolList(STORES, byStore, today, resolutionsByStore, aliasMap),
+    [byStore, today, resolutionsByStore, aliasMap]
   );
   const stats = useMemo(() => summarize(patrol), [patrol]);
 
@@ -166,18 +185,29 @@ export default function Dashboard() {
     await updateMonthlyCheck(id, { lastCheckedAt: lastCheckedAt ? null : nowMs() });
   };
 
-  const aliasMap = useMemo(() => buildAliasMap(master), [master]);
   // '지금 시켜야 할 것'은 미도착 발주와 다르다. 재고가 임계치 미만인데 아직 안 시킨 품목.
   const selectedStock = useMemo(
-    () => (selected ? buildStoreReorder(byStore[selected] || [], aliasMap, today) : null),
-    [selected, byStore, aliasMap, today]
+    () =>
+      selected
+        ? buildStoreReorder(byStore[selected] || [], aliasMap, today, resolutionsByStore[selected] || [])
+        : null,
+    [selected, byStore, aliasMap, today, resolutionsByStore]
   );
 
-  /** 고장·해야할일 한 줄을 임원이 직접 닫는다 */
+  /** 고장·해야할일·발주 한 줄을 임원이 직접 닫는다 */
   const handleResolve = async (kind, text) => {
     if (!selectedStatus) return;
     if (!window.confirm(`"${text}"\n해결된 것으로 처리할까요?`)) return;
     await resolve(selectedStatus.store.id, kind, text);
+  };
+
+  /** 발주 여러 건을 한 번에 완료 처리한다 */
+  const handleResolveAllOrders = async (list) => {
+    if (!selectedStatus || !list || list.length === 0) return;
+    if (!window.confirm(`${list.length}건을 모두 발주완료 처리할까요?`)) return;
+    for (const o of list) {
+      await resolve(selectedStatus.store.id, 'order', o.name);
+    }
   };
 
   /**
@@ -440,9 +470,17 @@ export default function Dashboard() {
                 📦 발주 필요
                 <span className="label-sub">문자의 ■주문</span>
                 {selectedStock?.needOrder.length > 0 && (
-                  <button className="btn-sm btn-secondary label-action" onClick={handleCopyReorder}>
-                    복사
-                  </button>
+                  <>
+                    <button className="btn-sm btn-secondary label-action" onClick={handleCopyReorder}>
+                      복사
+                    </button>
+                    <button
+                      className="btn-sm btn-secondary label-action"
+                      onClick={() => handleResolveAllOrders(selectedStock.needOrder)}
+                    >
+                      일괄 발주완료
+                    </button>
+                  </>
                 )}
               </div>
               {!selectedStock || selectedStock.needOrder.length === 0 ? (
@@ -457,13 +495,35 @@ export default function Dashboard() {
                         {n.name}
                         {n.urgent && <span className="urgent-badge">긴급</span>}
                       </span>
-                      <span className="need-qty">
-                        <RepeatTag count={n.count} changed={n.changed} />
+                      <span className="need-qty order-quick-tags">
+                        <RepeatTag count={n.count} changed={n.changed} mode="order" />
                         {n.qty != null ? `${n.qty}${n.unit}` : '수량 미기재'}
                         {n.stock != null && (
                           <span className="need-stock"> · 현재고 {n.stock}</span>
                         )}
+                        <button className="btn-resolve" onClick={() => handleResolve('order', n.name)}>
+                          ✓ 발주완료
+                        </button>
                       </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {selectedStock?.resolvedNeedOrder?.length > 0 && (
+                <ul className="order-quick-list resolved-list">
+                  {selectedStock.resolvedNeedOrder.map((it) => (
+                    <li key={it.name} className="order-quick-item resolved-item">
+                      <span className="item-main">
+                        <span className="resolved-text">{it.name}</span>
+                        <span className="item-variants">
+                          발주완료 처리됨 · 매장이 다시 올리면 되살아납니다
+                        </span>
+                      </span>
+                      {it.resolution?.id && (
+                        <button className="btn-undo" onClick={() => unresolve(it.resolution.id)}>
+                          되돌리기
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -474,6 +534,14 @@ export default function Dashboard() {
               <div className="store-modal-label">
                 🚚 미도착 발주
                 <span className="label-sub">문자의 (이전요청)</span>
+                {selectedStock?.prevOrders.length > 0 && (
+                  <button
+                    className="btn-sm btn-secondary label-action"
+                    onClick={() => handleResolveAllOrders(selectedStock.prevOrders)}
+                  >
+                    일괄 발주완료
+                  </button>
+                )}
               </div>
               {!selectedStock || selectedStock.prevOrders.length === 0 ? (
                 <p className="store-modal-empty">없음</p>
@@ -489,9 +557,31 @@ export default function Dashboard() {
                         )}
                       </span>
                       <span className="order-quick-tags">
-                        <RepeatTag count={o.count} changed={o.changed} />
+                        <RepeatTag count={o.count} changed={o.changed} mode="order" />
                         <span className="wait-tag">{waitLabel(o.age)}</span>
+                        <button className="btn-resolve" onClick={() => handleResolve('order', o.name)}>
+                          ✓ 발주완료
+                        </button>
                       </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {selectedStock?.resolvedPrevOrders?.length > 0 && (
+                <ul className="order-quick-list resolved-list">
+                  {selectedStock.resolvedPrevOrders.map((it, i) => (
+                    <li key={i} className="order-quick-item resolved-item">
+                      <span className="item-main">
+                        <span className="resolved-text">{it.name}</span>
+                        <span className="item-variants">
+                          발주완료 처리됨 · 매장이 다시 올리면 되살아납니다
+                        </span>
+                      </span>
+                      {it.resolution?.id && (
+                        <button className="btn-undo" onClick={() => unresolve(it.resolution.id)}>
+                          되돌리기
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

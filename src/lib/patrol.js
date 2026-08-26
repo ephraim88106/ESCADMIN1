@@ -9,6 +9,7 @@
 // 어제 있던 줄이 오늘 보고에 없으면 = 해결됨. 별도 완료 보고가 필요 없다.
 
 import { toDateKey } from './parseV3';
+import { canonicalName } from './itemName';
 
 export const THRESHOLDS = {
   tempHigh: 28,
@@ -211,8 +212,9 @@ function tempFlags(parsed) {
  * @param {Array}  handoffs 이 매장의 보고 전체
  * @param {string} today  YYYY-MM-DD
  * @param {Array}  resolutions 이 매장에서 임원이 직접 닫은 항목들
+ * @param {Map}    aliasMap 품목 별칭 맵. 발주완료 매칭을 stock.js 와 같은 대표 품목명 기준으로 맞추는 데 쓴다.
  */
-export function buildStoreStatus(store, handoffs, today, resolutions = []) {
+export function buildStoreStatus(store, handoffs, today, resolutions = [], aliasMap = null) {
   const reports = foldByDate(handoffs || []);
   const last = reports[reports.length - 1] || null;
   const lastDateKey = last?.dateKey ?? null;
@@ -245,17 +247,30 @@ export function buildStoreStatus(store, handoffs, today, resolutions = []) {
     const t = orderTrack.get(normText(o.name)) || null;
     const from = t?.firstDate || null;
     return {
-      text: o.name,
+      // stock.js 의 발주완료 처리와 같은 대표 품목명을 키로 쓴다. 안 그러면
+      // 별칭으로 적힌 품목은 여기서 안 닫힌다.
+      text: canonicalName(o.name, aliasMap),
       firstDate: from,
       count: t?.count ?? 1,
       changed: !!t?.changed,
       variants: t?.variants ?? [o.name],
+      lastAt: t?.lastAt ?? null,
       // 기간을 모르면 null. (이전요청) 인데 이전 보고가 없는 경우.
       age: from ? daysBetween(from, today) : o.previous ? null : 0,
     };
   };
-  const newOrders = latestOrders.filter((o) => !o.previous).map(asOrder);
-  const openOrders = latestOrders.filter((o) => o.previous).map(asOrder);
+  const newOrdersSplit = applyResolutions(
+    latestOrders.filter((o) => !o.previous).map(asOrder),
+    resolutions,
+    'order'
+  );
+  const openOrdersSplit = applyResolutions(
+    latestOrders.filter((o) => o.previous).map(asOrder),
+    resolutions,
+    'order'
+  );
+  const newOrders = newOrdersSplit.open;
+  const openOrders = openOrdersSplit.open;
 
   const withAge = (items) =>
     items
@@ -404,11 +419,12 @@ export function buildPatrolList(
   stores,
   handoffsByStore,
   today = todayKey(),
-  resolutionsByStore = {}
+  resolutionsByStore = {},
+  aliasMap = null
 ) {
   return stores
     .map((s) =>
-      buildStoreStatus(s, handoffsByStore[s.id] || [], today, resolutionsByStore[s.id] || [])
+      buildStoreStatus(s, handoffsByStore[s.id] || [], today, resolutionsByStore[s.id] || [], aliasMap)
     )
     .sort((a, b) => {
       if (a.tier !== b.tier) return a.tier - b.tier;
