@@ -4,6 +4,7 @@ import {
   query,
   where,
   onSnapshot,
+  getDocs,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -52,6 +53,59 @@ function notify(name) {
 
 const notifyTrash = () => notify(TRASH_EVENT);
 const notifyHandoffs = () => notify(HANDOFF_EVENT);
+
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function normSeat(text) {
+  return String(text || '').trim().replace(/번$/, '').toLowerCase();
+}
+
+/**
+ * 문자의 ■고정석 번호를 "지정석 목록"(tasklists, type=seats)에 자동으로 반영한다.
+ * 이미 있는 번호는 건드리지 않는다 — 시작일/종료일을 손으로 넣어둔 걸 덮어쓰면 안 된다.
+ */
+async function syncFixedSeatsToTaskList(storeId, fixedSeats) {
+  if (!storeId || !fixedSeats || fixedSeats.length === 0) return;
+
+  const newEntry = (text) => ({
+    storeId,
+    type: 'seats',
+    text,
+    startDate: todayStr(),
+    date: '',
+    memo: '',
+    checked: false,
+    order: Date.now(),
+  });
+
+  if (isFirebaseConfigured) {
+    const snapshot = await getDocs(
+      query(collection(db, 'tasklists'), where('storeId', '==', storeId), where('type', '==', 'seats'))
+    );
+    const existing = new Set(snapshot.docs.map((d) => normSeat(d.data().text)));
+    const toAdd = fixedSeats.filter((s) => !existing.has(normSeat(s)));
+    for (const text of toAdd) {
+      await addDoc(collection(db, 'tasklists'), newEntry(text));
+    }
+    return;
+  }
+
+  const key = `tasklist_${storeId}_seats`;
+  const list = getLocalData(key);
+  const existing = new Set(list.map((t) => normSeat(t.text)));
+  const toAdd = fixedSeats.filter((s) => !existing.has(normSeat(s)));
+  if (toAdd.length === 0) return;
+  for (const text of toAdd) {
+    list.push({ id: generateId(), ...newEntry(text) });
+  }
+  setLocalData(key, list);
+}
 
 async function archive(kind, payload) {
   if (!payload) return;
@@ -324,6 +378,7 @@ export function useAllHandoffs() {
       ? (byStore[storeId] || []).find((h) => h.parsed?.dateKey === dateKey)
       : null;
 
+    let mode;
     if (isFirebaseConfigured) {
       if (existing) {
         await updateDoc(doc(db, 'handoffs', existing.id), {
@@ -331,30 +386,34 @@ export function useAllHandoffs() {
           storeId,
           updatedAt: Date.now(),
         });
-        return 'updated';
+        mode = 'updated';
+      } else {
+        await addDoc(collection(db, 'handoffs'), {
+          ...data,
+          storeId,
+          createdAt: Date.now(),
+        });
+        mode = 'created';
       }
-      await addDoc(collection(db, 'handoffs'), {
-        ...data,
-        storeId,
-        createdAt: Date.now(),
-      });
-      return 'created';
+    } else {
+      const key = `handoffs_${storeId}`;
+      const list = getLocalData(key);
+      if (existing) {
+        const next = list.map((h) =>
+          h.id === existing.id ? { ...h, ...data, storeId, updatedAt: Date.now() } : h
+        );
+        setLocalData(key, next);
+        mode = 'updated';
+      } else {
+        list.push({ id: generateId(), ...data, storeId, createdAt: Date.now() });
+        setLocalData(key, list);
+        mode = 'created';
+      }
+      refreshLocal();
     }
 
-    const key = `handoffs_${storeId}`;
-    const list = getLocalData(key);
-    if (existing) {
-      const next = list.map((h) =>
-        h.id === existing.id ? { ...h, ...data, storeId, updatedAt: Date.now() } : h
-      );
-      setLocalData(key, next);
-      refreshLocal();
-      return 'updated';
-    }
-    list.push({ id: generateId(), ...data, storeId, createdAt: Date.now() });
-    setLocalData(key, list);
-    refreshLocal();
-    return 'created';
+    await syncFixedSeatsToTaskList(storeId, data.parsed?.fixedSeats);
+    return mode;
   };
 
   /** 같은 매장·같은 날짜 보고가 이미 있는지 확인 (등록 전 경고용) */

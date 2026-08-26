@@ -110,6 +110,11 @@ function RepeatTag({ count, changed, mode }) {
   );
 }
 
+/** 좌석 번호 비교용. "37번"과 "37"을 같은 자리로 본다. */
+function normSeat(text) {
+  return String(text || '').trim().replace(/번$/, '').toLowerCase();
+}
+
 /**
  * 합쳐진 원본 문구들.
  * 칸은 하나로 접되, 어떤 줄들이 묶였는지는 보여줘야 한다.
@@ -184,6 +189,18 @@ export default function Dashboard() {
   const handleMonthlyCheck = async (id, lastCheckedAt) => {
     await updateMonthlyCheck(id, { lastCheckedAt: lastCheckedAt ? null : nowMs() });
   };
+
+  /**
+   * 고정석과 지정석은 같은 자리다.
+   * 지정석 목록(수동 관리 + 오늘 보고 동기화)에 있거나 오늘 문자의 ■고정석/■지정석에
+   * 적힌 번호는, 그 매장이 같은 문자의 ■빈자리에도 실수로 같이 적었더라도
+   * '빈자리'로 다시 띄우지 않는다.
+   */
+  const designatedSeatNums = useMemo(() => {
+    const nums = new Set(selectedSeats.map((s) => normSeat(s.text)));
+    for (const s of selectedStatus?.parsed?.fixedSeats || []) nums.add(normSeat(s));
+    return nums;
+  }, [selectedSeats, selectedStatus]);
 
   // '지금 시켜야 할 것'은 미도착 발주와 다르다. 재고가 임계치 미만인데 아직 안 시킨 품목.
   const selectedStock = useMemo(
@@ -598,24 +615,32 @@ export default function Dashboard() {
             />
 
             <div className="store-modal-section">
-              <div className="store-modal-label">🪑 빈자리</div>
-              {selectedStatus.emptySeats.length === 0 ? (
-                <p className="store-modal-empty">없음</p>
-              ) : (
-                <ul className="order-quick-list">
-                  {selectedStatus.emptySeats.map((it, i) => (
-                    <li key={i} className="order-quick-item">
-                      <span className="item-main">
-                        {it.text}
-                        <Variants list={it.variants} current={it.text} />
-                      </span>
-                      <span className={`empty-seat-badge ${emptySeatBadgeClass(it.count)}`}>
-                        {it.count}회
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div className="store-modal-label">
+                🪑 빈자리
+                <span className="label-sub">고정석·지정석은 제외</span>
+              </div>
+              {(() => {
+                const shownEmptySeats = selectedStatus.emptySeats.filter(
+                  (it) => !designatedSeatNums.has(normSeat(it.text))
+                );
+                return shownEmptySeats.length === 0 ? (
+                  <p className="store-modal-empty">없음</p>
+                ) : (
+                  <ul className="order-quick-list">
+                    {shownEmptySeats.map((it, i) => (
+                      <li key={i} className="order-quick-item">
+                        <span className="item-main">
+                          {it.text}
+                          <Variants list={it.variants} current={it.text} />
+                        </span>
+                        <span className={`empty-seat-badge ${emptySeatBadgeClass(it.count)}`}>
+                          {it.count}회
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
             </div>
 
             <DetailSection
