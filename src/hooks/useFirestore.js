@@ -63,7 +63,8 @@ function todayStr() {
 }
 
 function normSeat(text) {
-  return String(text || '').trim().replace(/번$/, '').toLowerCase();
+  const s = String(text || '').trim().replace(/번$/, '').toLowerCase();
+  return /^\d+$/.test(s) ? String(parseInt(s, 10)) : s;
 }
 
 /**

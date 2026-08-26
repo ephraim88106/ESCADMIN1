@@ -110,9 +110,10 @@ function RepeatTag({ count, changed, mode }) {
   );
 }
 
-/** 좌석 번호 비교용. "37번"과 "37"을 같은 자리로 본다. */
+/** 좌석 번호 비교용. "37번"과 "37", "01"과 "1"을 같은 자리로 본다. */
 function normSeat(text) {
-  return String(text || '').trim().replace(/번$/, '').toLowerCase();
+  const s = String(text || '').trim().replace(/번$/, '').toLowerCase();
+  return /^\d+$/.test(s) ? String(parseInt(s, 10)) : s;
 }
 
 /**
