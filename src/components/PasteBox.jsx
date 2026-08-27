@@ -1,7 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { detectStoreFromText } from '../data/stores';
 import { parseHandoffText, LABEL_ICONS } from '../lib/parseHandoff';
 import ConvertForm from './ConvertForm';
+
+// 대시보드 문자 붙여넣기 임시저장. 등록 전에 페이지를 벗어나도 붙여넣은 문자가 지워지지 않게 한다.
+const DRAFT_KEY = 'pastebox_draft';
+
+function loadDraft() {
+  try {
+    return localStorage.getItem(DRAFT_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function saveDraft(text) {
+  try {
+    if (text) localStorage.setItem(DRAFT_KEY, text);
+    else localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // 임시저장은 편의 기능이라 실패해도 무시한다
+  }
+}
 
 /**
  * 카톡 문자 붙여넣기 → 미리보기 → 등록.
@@ -11,9 +31,13 @@ import ConvertForm from './ConvertForm';
  * 현장이 아직 대부분 구양식이라 변환 경로가 사실상 주 입력 경로다.
  */
 export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(loadDraft);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    saveDraft(text);
+  }, [text]);
 
   const analysis = useMemo(() => {
     if (!text.trim()) return null;
