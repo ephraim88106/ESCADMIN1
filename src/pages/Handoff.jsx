@@ -1,8 +1,36 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getStoreById, detectStoreFromText } from '../data/stores';
 import { useHandoffs, useNotices, useInventory, useOrders } from '../hooks/useFirestore';
 import { parseHandoffText, LABEL_ICONS } from '../lib/parseHandoff';
+
+// 새 인수인계 폼 임시저장. 페이지를 벗어나거나 새로고침해도 쓰던 내용이 지워지지 않게 한다.
+const DRAFT_KEY_PREFIX = 'handoff_draft_';
+
+function loadDraft(storeId) {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY_PREFIX + storeId);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(storeId, draft) {
+  try {
+    localStorage.setItem(DRAFT_KEY_PREFIX + storeId, JSON.stringify(draft));
+  } catch {
+    // 이미지가 많아 용량을 넘기는 등 — 임시저장은 편의 기능이라 실패해도 무시한다
+  }
+}
+
+function clearDraft(storeId) {
+  try {
+    localStorage.removeItem(DRAFT_KEY_PREFIX + storeId);
+  } catch {
+    // ignore
+  }
+}
 
 // 중복 텍스트 감지: 일치하는 기존 인수인계 반환 (없으면 null)
 function findDuplicate(newText, existingHandoffs) {
@@ -66,6 +94,48 @@ export default function Handoff() {
   const [expandedIds, setExpandedIds] = useState(new Set());
   const [detectedStore, setDetectedStore] = useState(null);
   const [duplicateOf, setDuplicateOf] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const restoredRef = useRef(false);
+
+  // 매장이 바뀔 때마다 그 매장의 임시저장을 불러오고, 없으면 폼을 비운다
+  useEffect(() => {
+    restoredRef.current = false;
+    const draft = loadDraft(storeId);
+    if (draft && (draft.rawText?.trim() || draft.author?.trim() || draft.images?.length)) {
+      setAuthor(draft.author || '');
+      setRawText(draft.rawText || '');
+      setImages(draft.images || []);
+      setEditingId(draft.editingId || null);
+      setDetectedStore(detectStoreFromText(draft.rawText || ''));
+      setShowForm(true);
+    } else {
+      setAuthor('');
+      setRawText('');
+      setImages([]);
+      setEditingId(null);
+      setDetectedStore(null);
+      setDuplicateOf(null);
+      setPreview(null);
+    }
+    restoredRef.current = true;
+  }, [storeId]);
+
+  // 폼 내용이 바뀔 때마다 임시저장 — 페이지를 벗어나도 남아있게
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    if (!author.trim() && !rawText.trim() && images.length === 0 && !editingId) {
+      clearDraft(storeId);
+      return;
+    }
+    saveDraft(storeId, { editingId, author, rawText, images });
+  }, [storeId, editingId, author, rawText, images]);
+
+  // 등록 전 미리보기용 — 날짜를 안 적으면 오늘 날짜로 자동 등록됨을 보여준다
+  const dateInfo = useMemo(() => {
+    if (!rawText.trim()) return null;
+    const { parsed, formatVersion } = parseHandoffText(rawText);
+    return formatVersion === 'v3' ? parsed : null;
+  }, [rawText]);
 
   if (!store) return <p>지점을 찾을 수 없습니다.</p>;
 
@@ -90,7 +160,8 @@ export default function Handoff() {
     setPreview(null);
     const found = detectStoreFromText(text);
     setDetectedStore(found);
-    setDuplicateOf(findDuplicate(text, handoffs));
+    const others = editingId ? handoffs.filter((h) => h.id !== editingId) : handoffs;
+    setDuplicateOf(findDuplicate(text, others));
   };
 
   const handleParse = () => {
@@ -98,12 +169,38 @@ export default function Handoff() {
     setPreview(parseHandoffText(rawText).sections);
   };
 
-  const isOtherStore = detectedStore && detectedStore.id !== storeId;
+  const isOtherStore = !editingId && detectedStore && detectedStore.id !== storeId;
+
+  const resetForm = () => {
+    setAuthor('');
+    setRawText('');
+    setPreview(null);
+    setImages([]);
+    setDetectedStore(null);
+    setDuplicateOf(null);
+    setShowForm(false);
+    setEditingId(null);
+    clearDraft(storeId);
+  };
 
   const handleSubmit = async () => {
     if (!rawText.trim()) return;
     const { parsed, sections, formatVersion } = parseHandoffText(rawText);
     if (sections.length === 0) return;
+
+    if (editingId) {
+      await updateHandoff(editingId, {
+        author: author.trim() || '미입력',
+        rawText,
+        sections,
+        parsed,
+        formatVersion,
+        images,
+      });
+      resetForm();
+      return;
+    }
+
     const targetId = isOtherStore ? detectedStore.id : undefined;
     await addHandoff({
       author: author.trim() || '미입력',
@@ -130,16 +227,23 @@ export default function Handoff() {
       }
     }
 
-    setAuthor('');
-    setRawText('');
-    setPreview(null);
-    setImages([]);
-    setDetectedStore(null);
-    setDuplicateOf(null);
-    setShowForm(false);
-    if (isOtherStore) {
-      navigate(`/store/${detectedStore.id}/board/handoff`);
+    const wentToOtherStore = isOtherStore;
+    const otherStoreId = detectedStore?.id;
+    resetForm();
+    if (wentToOtherStore) {
+      navigate(`/store/${otherStoreId}/board/handoff`);
     }
+  };
+
+  const handleEditStart = (h) => {
+    setEditingId(h.id);
+    setAuthor(h.author === '미입력' ? '' : h.author || '');
+    setRawText(h.rawText || '');
+    setPreview(null);
+    setDetectedStore(detectStoreFromText(h.rawText || ''));
+    setDuplicateOf(findDuplicate(h.rawText || '', handoffs.filter((x) => x.id !== h.id)));
+    setImages(h.images || []);
+    setShowForm(true);
   };
 
   const handleImageUpload = (e) => {
@@ -353,10 +457,17 @@ export default function Handoff() {
   return (
     <div className="handoff-page">
       <div className="page-header">
-        <h2>인수인계</h2>
+        <h2>{editingId ? '인수인계 수정' : '인수인계'}</h2>
         <button
           className="btn-primary"
-          onClick={() => { setShowForm(!showForm); setPreview(null); }}
+          onClick={() => {
+            if (editingId) {
+              resetForm();
+            } else {
+              setShowForm(!showForm);
+              setPreview(null);
+            }
+          }}
         >
           {showForm ? '취소' : '+ 새 인수인계'}
         </button>
@@ -414,6 +525,12 @@ export default function Handoff() {
               {isOtherStore && <span> (현재: {store.name} → {detectedStore.name}에 등록됩니다)</span>}
             </div>
           )}
+          {dateInfo && (
+            <div className="detected-store-badge">
+              🗓 {dateInfo.dateLabel}
+              {dateInfo.autoDated && <span> — 날짜를 안 적어서 오늘 날짜로 자동 등록됩니다</span>}
+            </div>
+          )}
           <label>
             사진 첨부
             <input
@@ -439,7 +556,7 @@ export default function Handoff() {
               미리보기
             </button>
             <button type="button" className="btn-primary" onClick={handleSubmit}>
-              바로 등록
+              {editingId ? '수정 저장' : '바로 등록'}
             </button>
           </div>
 
@@ -456,7 +573,7 @@ export default function Handoff() {
                 );
               })}
               <button type="button" className="btn-primary" onClick={handleSubmit}>
-                이대로 등록
+                {editingId ? '이대로 수정 저장' : '이대로 등록'}
               </button>
             </div>
           )}
@@ -485,6 +602,9 @@ export default function Handoff() {
                 <div className="handoff-card-actions">
                   <button className="btn-primary btn-confirm" onClick={() => handleConfirmAll(h)}>
                     확인 완료
+                  </button>
+                  <button className="btn-sm" onClick={() => handleEditStart(h)}>
+                    수정
                   </button>
                   <button className="btn-sm btn-danger" onClick={() => handleDelete(h)}>
                     삭제
@@ -537,6 +657,7 @@ export default function Handoff() {
                       <span className="handoff-checker">→ {h.checkedBy}</span>
                     </div>
                     <div className="history-actions" onClick={(e) => e.stopPropagation()}>
+                      <button className="btn-sm" onClick={() => handleEditStart(h)}>수정</button>
                       <button className="btn-sm btn-danger" onClick={() => handleDelete(h)}>삭제</button>
                       <span className="expand-icon" onClick={() => toggleExpanded(h.id)}>{expandedIds.has(h.id) ? '▲' : '▼'}</span>
                     </div>

@@ -12,6 +12,13 @@
 
 import { detectStoreFromText } from '../data/stores';
 
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+function formatDateLabel(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAYS[d.getDay()]})`;
+}
+
 export const V3_SECTIONS = [
   { key: 'fixedSeats', title: '고정석', required: true },
   { key: 'faults', title: '고장', required: true },
@@ -226,6 +233,7 @@ export function parseV3(text, baseTime = Date.now()) {
   const header = parseHeader(headerLine);
   const store = detectStoreFromText(text);
   const dateKey = resolveDateKey(header.month, header.day, baseTime);
+  const hasExplicitDate = !!(header.month && header.day);
 
   const temps = raw.temps.map((t) => parseTemp(t.text, t.zone));
 
@@ -234,10 +242,11 @@ export function parseV3(text, baseTime = Date.now()) {
     storeId: store?.id ?? null,
     storeName: store?.name ?? header.storeText ?? null,
     dateKey,
-    dateLabel:
-      header.month && header.day
-        ? `${header.month}/${header.day}${header.weekday ? `(${header.weekday})` : ''}`
-        : '',
+    // 문자에 날짜가 없으면 등록 시각(오늘)로 자동 지정한다 — 담당자가 날짜를 안 적어도 되게.
+    dateLabel: hasExplicitDate
+      ? `${header.month}/${header.day}${header.weekday ? `(${header.weekday})` : ''}`
+      : formatDateLabel(baseTime),
+    autoDated: !hasExplicitDate,
     fixedSeats: splitSeats(raw.fixedSeats),
     faults: raw.faults,
     standing: raw.standing,

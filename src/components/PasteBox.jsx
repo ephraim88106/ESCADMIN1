@@ -93,7 +93,10 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
               <span className="paste-chip warn">매장을 못 찾았습니다 — 아래에서 골라주세요</span>
             )}
             {analysis.parsed?.dateLabel && (
-              <span className="paste-chip">🗓 {analysis.parsed.dateLabel}</span>
+              <span className="paste-chip">
+                🗓 {analysis.parsed.dateLabel}
+                {analysis.parsed.autoDated && ' (오늘 자동 지정)'}
+              </span>
             )}
             <span className={`paste-chip${isLegacy ? ' legacy' : ' ok'}`}>
               {isLegacy ? '구양식 → 변환 필요' : 'v3 양식'}
