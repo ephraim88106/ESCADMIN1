@@ -34,10 +34,17 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
   const [text, setText] = useState(loadDraft);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
+  const [draftSavedMsg, setDraftSavedMsg] = useState(false);
 
   useEffect(() => {
     saveDraft(text);
   }, [text]);
+
+  const handleManualSaveDraft = () => {
+    saveDraft(text);
+    setDraftSavedMsg(true);
+    setTimeout(() => setDraftSavedMsg(false), 2000);
+  };
 
   const analysis = useMemo(() => {
     if (!text.trim()) return null;
@@ -100,6 +107,18 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
         placeholder={'카톡 보고 문자를 그대로 붙여넣으세요.\n통일양식이 아니어도 됩니다 — v3 틀로 옮겨 담아 보여드립니다.'}
         rows={6}
       />
+
+      <div className="paste-draft-row">
+        <button
+          type="button"
+          className="btn-secondary"
+          disabled={!text.trim()}
+          onClick={handleManualSaveDraft}
+        >
+          임시저장
+        </button>
+        {draftSavedMsg && <span className="draft-saved-msg">💾 임시저장했습니다</span>}
+      </div>
 
       {result && (
         <div className="paste-result">

@@ -95,6 +95,7 @@ export default function Handoff() {
   const [detectedStore, setDetectedStore] = useState(null);
   const [duplicateOf, setDuplicateOf] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [draftSavedMsg, setDraftSavedMsg] = useState(false);
   const restoredRef = useRef(false);
 
   // 매장이 바뀔 때마다 그 매장의 임시저장을 불러오고, 없으면 폼을 비운다
@@ -167,6 +168,12 @@ export default function Handoff() {
   const handleParse = () => {
     if (!rawText.trim()) return;
     setPreview(parseHandoffText(rawText).sections);
+  };
+
+  const handleManualSaveDraft = () => {
+    saveDraft(storeId, { editingId, author, rawText, images });
+    setDraftSavedMsg(true);
+    setTimeout(() => setDraftSavedMsg(false), 2000);
   };
 
   const isOtherStore = !editingId && detectedStore && detectedStore.id !== storeId;
@@ -552,6 +559,14 @@ export default function Handoff() {
             </div>
           )}
           <div className="form-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={!author.trim() && !rawText.trim() && images.length === 0}
+              onClick={handleManualSaveDraft}
+            >
+              임시저장
+            </button>
             <button type="button" className="btn-secondary" onClick={handleParse}>
               미리보기
             </button>
@@ -559,6 +574,7 @@ export default function Handoff() {
               {editingId ? '수정 저장' : '바로 등록'}
             </button>
           </div>
+          {draftSavedMsg && <div className="draft-saved-msg">💾 임시저장했습니다</div>}
 
           {preview && (
             <div className="parse-preview">
