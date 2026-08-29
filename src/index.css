@@ -3085,6 +3085,68 @@ body {
   width: 100%;
 }
 
+/* 등록 직후 뜨는 공지 팝업 */
+.notice-popup {
+  width: 460px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.notice-popup-headline {
+  margin: -8px 0 14px;
+  font-size: 13px;
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.notice-popup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.notice-popup-item {
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: 8px;
+  border-left: 3px solid var(--primary);
+}
+
+.notice-popup-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.notice-pin {
+  margin-right: 4px;
+}
+
+.notice-popup-content {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.notice-popup-image {
+  margin-top: 8px;
+  border-radius: 6px;
+}
+
+.notice-popup-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.notice-check-by {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .resolved-list {
   margin-top: 6px;
   padding-top: 6px;

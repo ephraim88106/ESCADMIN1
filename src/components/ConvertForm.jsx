@@ -61,7 +61,7 @@ export default function ConvertForm({ rawText, upsertHandoff, findSameDay, onDon
         checkedBy: null,
         checkedAt: null,
       });
-      onDone?.({ storeName: store.name, dateText, mode: sameDay ? 'updated' : 'created' });
+      onDone?.({ storeId: store.id, storeName: store.name, dateText, mode: sameDay ? 'updated' : 'created' });
     } finally {
       setSaving(false);
     }

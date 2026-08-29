@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { STORES, getStoreById } from '../data/stores';
 import { useNotices } from '../hooks/useFirestore';
+import CheckerConfirm from '../components/CheckerConfirm';
 
 // 텍스트에서 매장명 자동 감지
 function detectStores(text) {
@@ -28,7 +29,7 @@ function formatTime(ts) {
 export default function Notices() {
   const { storeId } = useParams();
   const store = getStoreById(storeId);
-  const { notices, loading, addNotice, updateNotice, removeNotice } = useNotices(storeId);
+  const { notices, loading, addNotice, updateNotice, removeNotice, checkNotice } = useNotices(storeId);
 
   const [showForm, setShowForm] = useState(false);
   const [author, setAuthor] = useState('');
@@ -38,6 +39,9 @@ export default function Notices() {
   const [pinned, setPinned] = useState(false);
   const [detectedStores, setDetectedStores] = useState([]);
   const [images, setImages] = useState([]);
+  // 확인은 누가 읽었는지까지 남긴다. null 이면 확인창이 안 떠 있다.
+  const [confirmRequest, setConfirmRequest] = useState(null);
+  const [checkerName, setCheckerName] = useState('');
 
   if (!store) return <p>지점을 찾을 수 없습니다.</p>;
 
@@ -106,20 +110,35 @@ export default function Notices() {
     setImages((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleCheck = async (notice) => {
-    const already = notice.checkedStores || [];
-    if (already.includes(storeId)) return;
-    await updateNotice(notice.id, {
-      checkedStores: [...already, storeId],
+  const handleCheck = (notice) => {
+    if ((notice.checkedStores || []).includes(storeId)) return;
+    setConfirmRequest({
+      key: `notice:${notice.id}`,
+      title: '공지 확인',
+      target: notice.title || '공지사항',
+      detail: '읽었다고 표시합니다.',
+      run: (name) => checkNotice(notice, storeId, name),
     });
+  };
+
+  const runConfirmRequest = async (name) => {
+    if (!confirmRequest) return;
+    await confirmRequest.run(name);
+    setCheckerName(name);
+    setConfirmRequest(null);
   };
 
   const handleUncheck = async (notice) => {
     const already = notice.checkedStores || [];
     await updateNotice(notice.id, {
       checkedStores: already.filter((id) => id !== storeId),
+      checks: (notice.checks || []).filter((c) => c.storeId !== storeId),
     });
   };
+
+  /** 이 지점에서 누가 확인했는지 */
+  const checkedBy = (notice) =>
+    (notice.checks || []).filter((c) => c.storeId === storeId).slice(-1)[0] || null;
 
   const handleDelete = async (notice) => {
     if (window.confirm('이 공지를 삭제하시겠습니까?')) {
@@ -288,10 +307,25 @@ export default function Notices() {
                     {' · '}{checkedCount}/{totalCount} 확인
                   </span>
                 </div>
+                {checked && checkedBy(n) && (
+                  <div className="notice-check-by">
+                    ✓ {checkedBy(n).by || '이름 없음'} · {formatTime(checkedBy(n).at)} 확인
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
+      )}
+
+      {confirmRequest && (
+        <CheckerConfirm
+          key={confirmRequest.key}
+          request={confirmRequest}
+          defaultName={checkerName}
+          onCancel={() => setConfirmRequest(null)}
+          onConfirm={runConfirmRequest}
+        />
       )}
     </div>
   );

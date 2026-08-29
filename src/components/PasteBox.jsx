@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { detectStoreFromText } from '../data/stores';
 import { parseHandoffText, LABEL_ICONS } from '../lib/parseHandoff';
 import ConvertForm from './ConvertForm';
+import NoticePopup from './NoticePopup';
 
 // 대시보드 문자 붙여넣기 임시저장. 등록 전에 페이지를 벗어나도 붙여넣은 문자가 지워지지 않게 한다.
 const DRAFT_KEY = 'pastebox_draft';
@@ -35,6 +36,8 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
   const [draftSavedMsg, setDraftSavedMsg] = useState(false);
+  // 등록 직후 공지를 띄울 지점. null 이면 안 떠 있다.
+  const [noticeFor, setNoticeFor] = useState(null);
 
   useEffect(() => {
     saveDraft(text);
@@ -62,6 +65,8 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
   const finish = (info) => {
     setResult(info);
     setText('');
+    // 근무자가 앱에 확실히 들어오는 순간이 여기다. 미확인 공지는 이때 띄운다.
+    if (info?.storeId) setNoticeFor(info);
     onDone?.();
   };
 
@@ -86,6 +91,7 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
         checkedAt: null,
       });
       finish({
+        storeId: analysis.store.id,
         storeName: analysis.store.name,
         dateText: analysis.parsed?.dateLabel || '',
         mode,
@@ -182,6 +188,17 @@ export default function PasteBox({ upsertHandoff, findSameDay, onDone }) {
             </>
           )}
         </div>
+      )}
+
+      {noticeFor && (
+        <NoticePopup
+          storeId={noticeFor.storeId}
+          storeName={noticeFor.storeName}
+          headline={`✅ ${noticeFor.dateText} 보고를 ${
+            noticeFor.mode === 'updated' ? '덮어썼습니다' : '등록했습니다'
+          }`}
+          onClose={() => setNoticeFor(null)}
+        />
       )}
     </div>
   );

@@ -1103,5 +1103,22 @@ export function useNotices(storeId) {
     refreshLocal();
   };
 
-  return { notices, loading, addNotice, updateNotice, removeNotice };
+  /**
+   * 공지를 읽었다고 표시한다.
+   *
+   * checkedStores 는 지점 단위라 "상동점은 확인함"까지만 남는다.
+   * 교대 근무자가 여럿이면 누가 봤는지 모르므로 checks 에 이름과 시각을 같이 남긴다.
+   * checkedStores 는 예전 화면들이 그대로 쓰고 있어 함께 갱신한다.
+   */
+  const checkNotice = async (notice, targetStoreId, by) => {
+    const stores = notice.checkedStores || [];
+    const checks = notice.checks || [];
+    if (stores.includes(targetStoreId)) return;
+    return updateNotice(notice.id, {
+      checkedStores: [...stores, targetStoreId],
+      checks: [...checks, { storeId: targetStoreId, by: String(by || '').trim(), at: Date.now() }],
+    });
+  };
+
+  return { notices, loading, addNotice, updateNotice, removeNotice, checkNotice };
 }
