@@ -6,6 +6,7 @@ import { buildPatrolList, summarize, todayKey, THRESHOLDS, cardClass } from '../
 import { buildStoreReorder, storeReorderToText, waitLabel } from '../lib/stock';
 import { buildAliasMap } from '../lib/itemName';
 import PasteBox from '../components/PasteBox';
+import CheckerConfirm from '../components/CheckerConfirm';
 
 const REASON_CLASS = {
   missing: 'reason-missing',
@@ -197,15 +198,18 @@ export default function Dashboard() {
     updateTask: updateMonthlyCheck,
   } = useTaskList(selected, 'monthlyCheck');
 
-  const handleMonthlyCheck = async (id, lastCheckedAt) => {
-    await updateMonthlyCheck(
-      id,
-      lastCheckedAt ? { lastCheckedAt: null, checkedBy: '' } : { lastCheckedAt: nowMs() }
-    );
-  };
-
-  const handleMonthlyCheckedByChange = async (id, checkedBy) => {
-    await updateMonthlyCheck(id, { checkedBy });
+  const handleMonthlyCheck = (item) => {
+    // 취소는 되돌리기다 — 이름을 다시 받을 이유가 없다
+    if (item.lastCheckedAt) {
+      return updateMonthlyCheck(item.id, { lastCheckedAt: null, checkedBy: '' });
+    }
+    setConfirmRequest({
+      key: `monthly:${item.id}`,
+      title: '월간 점검 처리',
+      target: `"${item.text}"`,
+      detail: '오늘 점검한 것으로 처리합니다.',
+      run: (name) => updateMonthlyCheck(item.id, { lastCheckedAt: nowMs(), checkedBy: name }),
+    });
   };
 
   /**
@@ -536,18 +540,12 @@ export default function Dashboard() {
                           <span className={`seat-days-badge ${monthlyCheckBadgeClass(days)}`}>
                             {checkedDate ? `${checkedDate} 체크${days > 0 ? ` (${days}일 전)` : ''}` : '미체크'}
                           </span>
-                          {item.lastCheckedAt && (
-                            <input
-                              type="text"
-                              className="task-checker"
-                              placeholder="담당자"
-                              value={item.checkedBy || ''}
-                              onChange={(e) => handleMonthlyCheckedByChange(item.id, e.target.value)}
-                            />
+                          {item.lastCheckedAt && item.checkedBy && (
+                            <span className="task-checker-name">· {item.checkedBy}</span>
                           )}
                           <button
                             className="btn-resolve"
-                            onClick={() => handleMonthlyCheck(item.id, item.lastCheckedAt)}
+                            onClick={() => handleMonthlyCheck(item)}
                           >
                             {item.lastCheckedAt ? '체크 취소' : '✓ 체크'}
                           </button>
@@ -837,63 +835,6 @@ export default function Dashboard() {
           onConfirm={runConfirmRequest}
         />
       )}
-    </div>
-  );
-}
-
-/**
- * 처리 전에 담당자 이름을 받는 확인창.
- * window.confirm 은 눌렀다는 사실만 남기고 누가 눌렀는지는 못 남긴다 — 그래서 직접 만든다.
- */
-function CheckerConfirm({ request, defaultName, onCancel, onConfirm }) {
-  const [name, setName] = useState(defaultName || '');
-  const [busy, setBusy] = useState(false);
-  // 저장이 막혔는데 버튼만 다시 살아나면 "눌렀는데 안 되네"가 된다
-  const [error, setError] = useState(null);
-
-  const submit = async () => {
-    const trimmed = name.trim();
-    if (!trimmed || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await onConfirm(trimmed);
-    } catch (e) {
-      setError(e?.message || '처리하지 못했습니다.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay checker-confirm-overlay" onClick={onCancel}>
-      <div className="modal checker-confirm" onClick={(e) => e.stopPropagation()}>
-        <h3>{request.title}</h3>
-        <p className="checker-confirm-target">{request.target}</p>
-        <p className="checker-confirm-detail">{request.detail}</p>
-        <label>
-          담당자
-          <input
-            type="text"
-            value={name}
-            placeholder="이름을 적어주세요"
-            autoFocus
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submit();
-            }}
-          />
-        </label>
-        {error && <p className="delete-error">⚠️ {error}</p>}
-        <div className="modal-actions">
-          <button className="btn-secondary" onClick={onCancel} disabled={busy}>
-            취소
-          </button>
-          <button className="btn-primary" onClick={submit} disabled={!name.trim() || busy}>
-            {busy ? '처리 중...' : '담당자 확인'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

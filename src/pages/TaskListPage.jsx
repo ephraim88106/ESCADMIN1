@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getStoreById } from '../data/stores';
 import { useTaskList } from '../hooks/useFirestore';
+import CheckerConfirm from '../components/CheckerConfirm';
 
 const MONTHLY_CHECK_ITEMS = ['담요', '제빙기'];
 
@@ -32,6 +33,10 @@ function MonthlyCheckSection({ storeId }) {
   const { tasks: items, loading, addTask, updateTask, removeTask } = useTaskList(storeId, 'monthlyCheck');
   const seeded = useRef(false);
   const [newText, setNewText] = useState('');
+  // 처리 전에 담당자 이름을 받는 확인창. null 이면 안 떠 있다.
+  const [confirmRequest, setConfirmRequest] = useState(null);
+  // 연달아 체크할 때 같은 이름을 계속 다시 치게 하지 않는다.
+  const [checkerName, setCheckerName] = useState('');
 
   useEffect(() => {
     if (loading || seeded.current || items.length > 0) return;
@@ -39,15 +44,25 @@ function MonthlyCheckSection({ storeId }) {
     MONTHLY_CHECK_ITEMS.forEach((text) => addTask({ text, lastCheckedAt: null, checkedBy: '' }));
   }, [loading, items.length, addTask]);
 
-  const handleCheck = async (id, lastCheckedAt) => {
-    await updateTask(
-      id,
-      lastCheckedAt ? { lastCheckedAt: null, checkedBy: '' } : { lastCheckedAt: nowMs() }
-    );
+  const handleCheck = (item) => {
+    // 취소는 되돌리기다 — 이름을 다시 받을 이유가 없다
+    if (item.lastCheckedAt) {
+      return updateTask(item.id, { lastCheckedAt: null, checkedBy: '' });
+    }
+    setConfirmRequest({
+      key: `monthly:${item.id}`,
+      title: '월간 점검 처리',
+      target: `"${item.text}"`,
+      detail: '오늘 점검한 것으로 처리합니다.',
+      run: (name) => updateTask(item.id, { lastCheckedAt: nowMs(), checkedBy: name }),
+    });
   };
 
-  const handleCheckedByChange = async (id, checkedBy) => {
-    await updateTask(id, { checkedBy });
+  const runConfirmRequest = async (name) => {
+    if (!confirmRequest) return;
+    await confirmRequest.run(name);
+    setCheckerName(name);
+    setConfirmRequest(null);
   };
 
   const handleAdd = async () => {
@@ -96,16 +111,10 @@ function MonthlyCheckSection({ storeId }) {
                 <span className={`seat-days-badge ${monthlyCheckBadgeClass(days)}`}>
                   {checkedDate ? `${checkedDate} 체크${days > 0 ? ` (${days}일 전)` : ''}` : '미체크'}
                 </span>
-                {item.lastCheckedAt && (
-                  <input
-                    type="text"
-                    className="task-checker"
-                    placeholder="담당자"
-                    value={item.checkedBy || ''}
-                    onChange={(e) => handleCheckedByChange(item.id, e.target.value)}
-                  />
+                {item.lastCheckedAt && item.checkedBy && (
+                  <span className="task-checker-name">· {item.checkedBy}</span>
                 )}
-                <button className="btn-primary btn-sm" onClick={() => handleCheck(item.id, item.lastCheckedAt)}>
+                <button className="btn-primary btn-sm" onClick={() => handleCheck(item)}>
                   {item.lastCheckedAt ? '체크 취소' : '체크 완료'}
                 </button>
                 <button className="task-delete" onClick={() => handleRemove(item.id)}>✕</button>
@@ -113,6 +122,16 @@ function MonthlyCheckSection({ storeId }) {
             );
           })}
         </div>
+      )}
+
+      {confirmRequest && (
+        <CheckerConfirm
+          key={confirmRequest.key}
+          request={confirmRequest}
+          defaultName={checkerName}
+          onCancel={() => setConfirmRequest(null)}
+          onConfirm={runConfirmRequest}
+        />
       )}
     </div>
   );
