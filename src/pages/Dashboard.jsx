@@ -188,7 +188,14 @@ export default function Dashboard() {
   } = useTaskList(selected, 'monthlyCheck');
 
   const handleMonthlyCheck = async (id, lastCheckedAt) => {
-    await updateMonthlyCheck(id, { lastCheckedAt: lastCheckedAt ? null : nowMs() });
+    await updateMonthlyCheck(
+      id,
+      lastCheckedAt ? { lastCheckedAt: null, checkedBy: '' } : { lastCheckedAt: nowMs() }
+    );
+  };
+
+  const handleMonthlyCheckedByChange = async (id, checkedBy) => {
+    await updateMonthlyCheck(id, { checkedBy });
   };
 
   /**
@@ -469,6 +476,15 @@ export default function Dashboard() {
                           <span className={`seat-days-badge ${monthlyCheckBadgeClass(days)}`}>
                             {checkedDate ? `${checkedDate} 체크${days > 0 ? ` (${days}일 전)` : ''}` : '미체크'}
                           </span>
+                          {item.lastCheckedAt && (
+                            <input
+                              type="text"
+                              className="task-checker"
+                              placeholder="담당자"
+                              value={item.checkedBy || ''}
+                              onChange={(e) => handleMonthlyCheckedByChange(item.id, e.target.value)}
+                            />
+                          )}
                           <button
                             className="btn-resolve"
                             onClick={() => handleMonthlyCheck(item.id, item.lastCheckedAt)}

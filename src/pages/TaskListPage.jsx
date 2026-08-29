@@ -36,17 +36,24 @@ function MonthlyCheckSection({ storeId }) {
   useEffect(() => {
     if (loading || seeded.current || items.length > 0) return;
     seeded.current = true;
-    MONTHLY_CHECK_ITEMS.forEach((text) => addTask({ text, lastCheckedAt: null }));
+    MONTHLY_CHECK_ITEMS.forEach((text) => addTask({ text, lastCheckedAt: null, checkedBy: '' }));
   }, [loading, items.length, addTask]);
 
   const handleCheck = async (id, lastCheckedAt) => {
-    await updateTask(id, { lastCheckedAt: lastCheckedAt ? null : nowMs() });
+    await updateTask(
+      id,
+      lastCheckedAt ? { lastCheckedAt: null, checkedBy: '' } : { lastCheckedAt: nowMs() }
+    );
+  };
+
+  const handleCheckedByChange = async (id, checkedBy) => {
+    await updateTask(id, { checkedBy });
   };
 
   const handleAdd = async () => {
     const text = newText.trim();
     if (!text) return;
-    await addTask({ text, lastCheckedAt: null });
+    await addTask({ text, lastCheckedAt: null, checkedBy: '' });
     setNewText('');
   };
 
@@ -89,6 +96,15 @@ function MonthlyCheckSection({ storeId }) {
                 <span className={`seat-days-badge ${monthlyCheckBadgeClass(days)}`}>
                   {checkedDate ? `${checkedDate} 체크${days > 0 ? ` (${days}일 전)` : ''}` : '미체크'}
                 </span>
+                {item.lastCheckedAt && (
+                  <input
+                    type="text"
+                    className="task-checker"
+                    placeholder="담당자"
+                    value={item.checkedBy || ''}
+                    onChange={(e) => handleCheckedByChange(item.id, e.target.value)}
+                  />
+                )}
                 <button className="btn-primary btn-sm" onClick={() => handleCheck(item.id, item.lastCheckedAt)}>
                   {item.lastCheckedAt ? '체크 취소' : '체크 완료'}
                 </button>

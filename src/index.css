@@ -414,6 +414,22 @@ body {
   flex-shrink: 0;
 }
 
+.task-checker {
+  width: 84px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--card-bg);
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.task-checker:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
 .task-item-wrapper {
   background: var(--bg);
   border-radius: 8px;
