@@ -16,6 +16,7 @@ export const THRESHOLDS = {
   tempLow: 18,
   humidityHigh: 70,
   staleDays: 3, // 이 일수 이상 안 닫히면 '방치'로 본다
+  orderWaitDays: 7, // 발주완료한 뒤 이 일수가 지나도 입고가 없으면 다시 알린다
 };
 
 export function daysBetween(fromKey, toKeyStr) {
@@ -190,6 +191,71 @@ export function applyResolutions(items, resolutions, kind) {
   return { open, resolved };
 }
 
+/**
+ * 품목별 마지막 입고 시각.
+ *
+ * ■입고 줄은 지금까지 파싱만 해두고 아무 데도 쓰지 않았다.
+ * 발주완료한 건을 언제 닫을지는 이 줄이 제일 정확하다 — 실제로 도착했다는 뜻이므로.
+ */
+export function buildArrivalMap(reports, aliasMap = null) {
+  const map = new Map();
+  for (const { handoff } of reports || []) {
+    if (handoff?.parsed?.formatVersion !== 'v3') continue;
+    const at = handoff.createdAt ?? 0;
+    for (const a of handoff.parsed.arrivals || []) {
+      const key = normText(canonicalName(a?.name ?? a, aliasMap));
+      if ((map.get(key) ?? 0) < at) map.set(key, at);
+    }
+  }
+  return map;
+}
+
+/**
+ * 발주 줄에 발주완료 처리를 반영한다.
+ *
+ * 고장·해야할일과 규칙이 다르다. 매장이 ■주문에 같은 품목을 계속 올리는 건
+ * "아직 안 시켰다"가 아니라 "아직 택배가 안 왔다"는 뜻이다. 그런데도 다시
+ * 올라왔다고 되살리면, 발주완료를 눌러도 도착할 때까지 매일 알림이 떴다.
+ *
+ *   입고됨    ■입고에 올라옴 → 닫는다
+ *   도착 대기 발주완료한 지 orderWaitDays 미만 → 알림에서 뺀다
+ *   미도착    그 일수를 넘겼는데도 입고가 없음 → 주문이 샜을 수 있으니 다시 알린다
+ */
+export function applyOrderResolutions(items, resolutions, { arrivals, today } = {}) {
+  const mine = (resolutions || []).filter((r) => r.kind === 'order');
+  const open = [];
+  const waiting = [];
+  const arrived = [];
+
+  for (const it of items) {
+    const keys = [normText(it.text), ...(it.variants || []).map(normText)];
+    const keySet = new Set(keys);
+    // 같은 품목을 여러 번 닫았을 수 있다. 가장 최근 처리를 기준으로 본다.
+    const hit = mine
+      .filter((r) => keySet.has(normText(r.text)))
+      .sort((a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0))[0];
+
+    if (!hit) {
+      open.push(it);
+      continue;
+    }
+
+    const orderedAt = hit.resolvedAt ?? 0;
+    const arrivedAt = keys.reduce((max, k) => Math.max(max, arrivals?.get(k) ?? 0), 0);
+    if (arrivedAt >= orderedAt) {
+      arrived.push({ ...it, resolution: hit, orderedAt, arrivedAt });
+      continue;
+    }
+
+    const waitingDays = daysBetween(toDateKey(orderedAt || Date.now()), today);
+    const entry = { ...it, resolution: hit, orderedAt, waitingDays };
+    if (waitingDays >= THRESHOLDS.orderWaitDays) open.push(entry);
+    else waiting.push(entry);
+  }
+
+  return { open, waiting, arrived };
+}
+
 function tempFlags(parsed) {
   if (!parsed?.temps) return [];
   const flags = [];
@@ -259,18 +325,22 @@ export function buildStoreStatus(store, handoffs, today, resolutions = [], alias
       age: from ? daysBetween(from, today) : o.previous ? null : 0,
     };
   };
-  const newOrdersSplit = applyResolutions(
+  const arrivalMap = buildArrivalMap(reports, aliasMap);
+  const orderOpts = { arrivals: arrivalMap, today };
+  const newOrdersSplit = applyOrderResolutions(
     latestOrders.filter((o) => !o.previous).map(asOrder),
     resolutions,
-    'order'
+    orderOpts
   );
-  const openOrdersSplit = applyResolutions(
+  const openOrdersSplit = applyOrderResolutions(
     latestOrders.filter((o) => o.previous).map(asOrder),
     resolutions,
-    'order'
+    orderOpts
   );
   const newOrders = newOrdersSplit.open;
   const openOrders = openOrdersSplit.open;
+  // waiting/arrived 는 알림에서 빠지는 것으로 충분하다.
+  // 지점 모달에 보여주는 목록은 stock.js 의 buildStoreReorder 가 만든다.
 
   const withAge = (items) =>
     items
@@ -316,17 +386,27 @@ export function buildStoreStatus(store, handoffs, today, resolutions = [], alias
   } else if (openItems.length > 0) {
     reasons.push({ kind: 'open', text: `미해결 ${openItems.length}건` });
   }
-  if (orderOverdue.length > 0) {
+  // 발주완료를 눌렀는데도 입고가 없어 되살아난 건은 따로 적는다.
+  // '미도착 발주 (최장 2일)'로 뭉뚱그리면, 시켜놓고 일주일째 안 온 건이 묻힌다.
+  const lateOrdered = [...newOrders, ...orderOverdue].filter((o) => o.waitingDays != null);
+  const notOrdered = orderOverdue.filter((o) => o.waitingDays == null);
+  const notOrderedNew = newOrders.filter((o) => o.waitingDays == null);
+
+  if (notOrdered.length > 0) {
     reasons.push({
       kind: 'order',
       text:
-        orderOverdue[0].age != null
-          ? `미도착 발주 ${orderOverdue.length}건 (최장 ${orderOverdue[0].age}일)`
-          : `미도착 발주 ${orderOverdue.length}건`,
+        notOrdered[0].age != null
+          ? `미도착 발주 ${notOrdered.length}건 (최장 ${notOrdered[0].age}일)`
+          : `미도착 발주 ${notOrdered.length}건`,
     });
   }
-  if (newOrders.length > 0) {
-    reasons.push({ kind: 'order', text: `발주 필요 ${newOrders.length}건` });
+  if (notOrderedNew.length > 0) {
+    reasons.push({ kind: 'order', text: `발주 필요 ${notOrderedNew.length}건` });
+  }
+  if (lateOrdered.length > 0) {
+    const worst = Math.max(...lateOrdered.map((o) => o.waitingDays));
+    reasons.push({ kind: 'order', text: `발주 ${worst}일째 미도착 ${lateOrdered.length}건` });
   }
   if (temps.length > 0) {
     reasons.push({ kind: 'temp', text: `온습도 이탈 ${temps.length}곳` });

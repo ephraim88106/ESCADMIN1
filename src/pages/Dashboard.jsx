@@ -233,6 +233,9 @@ export default function Dashboard() {
     [selected, byStore, aliasMap, today, resolutionsByStore]
   );
 
+  const waitingOrders = selectedStock?.waitingOrders || [];
+  const arrivedOrders = selectedStock?.arrivedOrders || [];
+
   /** 오늘 이 지점을 마감한 기록 */
   const storeConfirmation = useMemo(() => {
     if (!selected) return null;
@@ -601,25 +604,6 @@ export default function Dashboard() {
                   ))}
                 </ul>
               )}
-              {selectedStock?.resolvedNeedOrder?.length > 0 && (
-                <ul className="order-quick-list resolved-list">
-                  {selectedStock.resolvedNeedOrder.map((it) => (
-                    <li key={it.name} className="order-quick-item resolved-item">
-                      <span className="item-main">
-                        <span className="resolved-text">{it.name}</span>
-                        <span className="item-variants">
-                          {resolvedNote(it.resolution, '발주완료 처리됨')}
-                        </span>
-                      </span>
-                      {it.resolution?.id && (
-                        <button className="btn-undo" onClick={() => unresolve(it.resolution.id)}>
-                          되돌리기
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
 
             <div className="store-modal-section">
@@ -659,24 +643,60 @@ export default function Dashboard() {
                   ))}
                 </ul>
               )}
-              {selectedStock?.resolvedPrevOrders?.length > 0 && (
-                <ul className="order-quick-list resolved-list">
-                  {selectedStock.resolvedPrevOrders.map((it, i) => (
-                    <li key={i} className="order-quick-item resolved-item">
-                      <span className="item-main">
-                        <span className="resolved-text">{it.name}</span>
-                        <span className="item-variants">
-                          {resolvedNote(it.resolution, '발주완료 처리됨')}
-                        </span>
-                      </span>
-                      {it.resolution?.id && (
-                        <button className="btn-undo" onClick={() => unresolve(it.resolution.id)}>
-                          되돌리기
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+            </div>
+
+            <div className="store-modal-section">
+              <div className="store-modal-label">
+                🚚 도착 대기
+                <span className="label-sub">발주완료 · 입고되면 자동으로 닫힙니다</span>
+              </div>
+              {!waitingOrders.length && !arrivedOrders.length ? (
+                <p className="store-modal-empty">없음</p>
+              ) : (
+                <>
+                  {waitingOrders.length > 0 && (
+                    <ul className="order-quick-list">
+                      {waitingOrders.map((it, i) => (
+                        <li key={`w${i}`} className="order-quick-item">
+                          <span className="item-main">
+                            <span>{it.name}</span>
+                            <span className="item-variants">
+                              {formatStamp(it.orderedAt, '발주완료')}
+                              {it.resolution?.resolvedBy && ` · ${it.resolution.resolvedBy}`}
+                            </span>
+                          </span>
+                          <span className="order-quick-tags">
+                            <span className="wait-tag">
+                              {it.waitingDays > 0 ? `${it.waitingDays}일째` : '오늘 발주'}
+                            </span>
+                            {it.resolution?.id && (
+                              <button
+                                className="btn-undo"
+                                onClick={() => unresolve(it.resolution.id)}
+                              >
+                                되돌리기
+                              </button>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {arrivedOrders.length > 0 && (
+                    <ul className="order-quick-list resolved-list">
+                      {arrivedOrders.map((it, i) => (
+                        <li key={`a${i}`} className="order-quick-item resolved-item">
+                          <span className="item-main">
+                            <span className="resolved-text">{it.name}</span>
+                            <span className="item-variants">
+                              입고 확인됨 · 문자의 ■입고에 올라왔습니다
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
               )}
             </div>
 

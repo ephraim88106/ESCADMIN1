@@ -15,7 +15,14 @@
 // 임계치는 발주 판정에 쓰지 않고, 매트릭스에서 '재고가 적다'를 색으로 보여주는 데만 쓴다.
 // 재고가 바닥인데 담당자가 ■주문에 안 적었다면 목록에 뜨지 않는다 — 문자가 기준이다.
 
-import { foldByDate, trackOpenItems, daysBetween, todayKey, applyResolutions } from './patrol';
+import {
+  foldByDate,
+  trackOpenItems,
+  daysBetween,
+  todayKey,
+  buildArrivalMap,
+  applyOrderResolutions,
+} from './patrol';
 import { canonicalName, itemThreshold } from './itemName';
 
 export const DEFAULT_THRESHOLD = 2;
@@ -84,6 +91,8 @@ export function buildStoreStock(handoffs, aliasMap, today) {
     lastDateKey: last?.dateKey ?? null,
     reported: !!last,
     stock,
+    // 품목별 마지막 ■입고 시각. 발주완료한 건을 닫을 때 쓴다.
+    arrivals: buildArrivalMap(reports, aliasMap),
     newOrders,
     prevOrders,
     pendingOrders: [...newOrders, ...prevOrders],
@@ -187,16 +196,17 @@ export function buildStoreReorder(handoffs, aliasMap, today = todayKey(), resolu
   // 문자의 ■주문 그대로. 남은 재고는 양쪽 모두에 붙인다 —
   // 안 온 발주도 재고가 0이면 더 급하다.
   const withStock = (o) => ({ ...o, stock: info.stock.get(o.name)?.qty ?? null });
-  // 임원이 발주완료 처리한 품목은 뺀다. 매장이 다시 올리면(재요청) 되살아난다 —
-  // 고장·해야할일과 같은 정책.
-  const needOrderSplit = applyResolutions(info.newOrders.map(withStock), resolutions, 'order');
-  const prevOrdersSplit = applyResolutions(info.prevOrders.map(withStock), resolutions, 'order');
+  // 발주완료한 품목은 '도착 대기'로 내리고 알림에서 뺀다.
+  // 매장이 ■주문에 계속 올려도 되살리지 않는다 — 안 시켰다는 뜻이 아니라 아직 안 왔다는 뜻이므로.
+  const orderOpts = { arrivals: info.arrivals, today };
+  const needOrderSplit = applyOrderResolutions(info.newOrders.map(withStock), resolutions, orderOpts);
+  const prevOrdersSplit = applyOrderResolutions(info.prevOrders.map(withStock), resolutions, orderOpts);
   return {
     ...info,
     needOrder: needOrderSplit.open,
     prevOrders: prevOrdersSplit.open,
-    resolvedNeedOrder: needOrderSplit.resolved,
-    resolvedPrevOrders: prevOrdersSplit.resolved,
+    waitingOrders: [...needOrderSplit.waiting, ...prevOrdersSplit.waiting],
+    arrivedOrders: [...needOrderSplit.arrived, ...prevOrdersSplit.arrived],
   };
 }
 
