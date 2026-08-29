@@ -542,8 +542,15 @@ export function useResolutions() {
     return unsub;
   }, []);
 
-  const resolve = async (storeId, kind, text) => {
-    const entry = { storeId, kind, text, resolvedAt: Date.now(), resolvedBy: '임원' };
+  const resolve = async (storeId, kind, text, resolvedBy) => {
+    // 누가 닫았는지를 남긴다. 이름을 안 넘긴 옛 호출은 그대로 '임원'으로 둔다.
+    const entry = {
+      storeId,
+      kind,
+      text,
+      resolvedAt: Date.now(),
+      resolvedBy: String(resolvedBy || '').trim() || '임원',
+    };
     if (isFirebaseConfigured) {
       return addDoc(collection(db, 'resolutions'), entry);
     }

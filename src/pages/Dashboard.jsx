@@ -127,6 +127,12 @@ function Variants({ list, current }) {
   return <span className="item-variants">묶임 · {others.join(' / ')}</span>;
 }
 
+/** 닫힌 줄 옆에 누가 닫았는지 같이 적는다 */
+function resolvedNote(resolution, what) {
+  const by = resolution?.resolvedBy;
+  return `${what}${by ? ` · ${by}` : ''} · 매장이 다시 올리면 되살아납니다`;
+}
+
 function storeName(id) {
   return STORES.find((s) => s.id === id)?.name || id || '매장 모름';
 }
@@ -152,6 +158,10 @@ export default function Dashboard() {
   // 삭제가 실패해도 지금까지는 화면에 아무 표시가 없었다 → "눌렀는데 안 되네"가 됐다
   const [deleteError, setDeleteError] = useState(null);
   const [showTrash, setShowTrash] = useState(false);
+  // 처리 전에 담당자 이름을 받는 확인창. null 이면 안 떠 있다.
+  const [confirmRequest, setConfirmRequest] = useState(null);
+  // 한 지점을 도는 동안 같은 이름을 계속 다시 치게 하지 않는다.
+  const [checkerName, setCheckerName] = useState('');
 
   const today = todayKey();
   const aliasMap = useMemo(() => buildAliasMap(master), [master]);
@@ -219,20 +229,70 @@ export default function Dashboard() {
     [selected, byStore, aliasMap, today, resolutionsByStore]
   );
 
+  /** 오늘 이 지점을 마감한 기록 */
+  const storeConfirmation = useMemo(() => {
+    if (!selected) return null;
+    return (
+      (resolutionsByStore[selected] || []).find(
+        (r) => r.kind === 'storeConfirm' && r.text === today
+      ) || null
+    );
+  }, [selected, resolutionsByStore, today]);
+
+  /** 아직 담당자가 닫지 않은 줄. 이게 0이 돼야 지점 마감을 누를 수 있다. */
+  const openItemCount =
+    (selectedStock?.needOrder.length || 0) +
+    (selectedStock?.prevOrders.length || 0) +
+    (selectedStatus?.faults.length || 0) +
+    (selectedStatus?.todos.length || 0);
+
   /** 고장·해야할일·발주 한 줄을 임원이 직접 닫는다 */
-  const handleResolve = async (kind, text) => {
+  const handleResolve = (kind, text) => {
     if (!selectedStatus) return;
-    if (!window.confirm(`"${text}"\n해결된 것으로 처리할까요?`)) return;
-    await resolve(selectedStatus.store.id, kind, text);
+    const storeId = selectedStatus.store.id;
+    setConfirmRequest({
+      key: `${storeId}:${kind}:${text}`,
+      title: kind === 'order' ? '발주완료 처리' : '해결 처리',
+      target: `"${text}"`,
+      detail: kind === 'order' ? '발주완료로 처리합니다.' : '해결된 것으로 처리합니다.',
+      run: (name) => resolve(storeId, kind, text, name),
+    });
   };
 
   /** 발주 여러 건을 한 번에 완료 처리한다 */
-  const handleResolveAllOrders = async (list) => {
+  const handleResolveAllOrders = (list) => {
     if (!selectedStatus || !list || list.length === 0) return;
-    if (!window.confirm(`${list.length}건을 모두 발주완료 처리할까요?`)) return;
-    for (const o of list) {
-      await resolve(selectedStatus.store.id, 'order', o.name);
-    }
+    const storeId = selectedStatus.store.id;
+    const names = list.map((o) => o.name);
+    setConfirmRequest({
+      key: `${storeId}:bulk:${names.join('|')}`,
+      title: '일괄 발주완료 처리',
+      target: `${names.length}건`,
+      detail: '모두 발주완료로 처리합니다.',
+      run: async (name) => {
+        for (const n of names) await resolve(storeId, 'order', n, name);
+      },
+    });
+  };
+
+  /** 남은 줄을 다 닫은 뒤, 지점 하나를 담당자 이름으로 마감한다 */
+  const handleStoreConfirm = () => {
+    if (!selectedStatus || openItemCount > 0 || storeConfirmation) return;
+    const storeId = selectedStatus.store.id;
+    setConfirmRequest({
+      key: `${storeId}:store:${today}`,
+      title: '지점 담당자 확인',
+      target: `${selectedStatus.store.name} · ${today}`,
+      detail: '모든 항목을 처리했습니다. 담당자 이름으로 마감합니다.',
+      run: (name) => resolve(storeId, 'storeConfirm', today, name),
+    });
+  };
+
+  const runConfirmRequest = async (name) => {
+    if (!confirmRequest) return;
+    await confirmRequest.run(name);
+    setCheckerName(name);
+    setConfirmRequest(null);
   };
 
   /**
@@ -550,7 +610,7 @@ export default function Dashboard() {
                       <span className="item-main">
                         <span className="resolved-text">{it.name}</span>
                         <span className="item-variants">
-                          발주완료 처리됨 · 매장이 다시 올리면 되살아납니다
+                          {resolvedNote(it.resolution, '발주완료 처리됨')}
                         </span>
                       </span>
                       {it.resolution?.id && (
@@ -608,7 +668,7 @@ export default function Dashboard() {
                       <span className="item-main">
                         <span className="resolved-text">{it.name}</span>
                         <span className="item-variants">
-                          발주완료 처리됨 · 매장이 다시 올리면 되살아납니다
+                          {resolvedNote(it.resolution, '발주완료 처리됨')}
                         </span>
                       </span>
                       {it.resolution?.id && (
@@ -717,6 +777,36 @@ export default function Dashboard() {
               )}
             </div>
 
+            <div className="store-modal-section">
+              <div className="store-modal-label">
+                ✅ 담당자 확인
+                <span className="label-sub">모든 항목을 처리한 뒤 마감합니다</span>
+              </div>
+              {storeConfirmation ? (
+                <div className="store-confirm-done">
+                  <span className="item-main">
+                    <span>
+                      <strong>{storeConfirmation.resolvedBy}</strong> 확인 완료
+                    </span>
+                    <span className="item-variants">
+                      {formatStamp(storeConfirmation.resolvedAt, '확인')}
+                    </span>
+                  </span>
+                  <button className="btn-undo" onClick={() => unresolve(storeConfirmation.id)}>
+                    되돌리기
+                  </button>
+                </div>
+              ) : openItemCount > 0 ? (
+                <p className="store-modal-empty">
+                  남은 {openItemCount}건을 모두 처리하면 담당자 확인을 누를 수 있습니다.
+                </p>
+              ) : (
+                <button className="btn-primary store-confirm-btn" onClick={handleStoreConfirm}>
+                  담당자 확인
+                </button>
+              )}
+            </div>
+
             <div className="modal-actions store-modal-actions">
               <button
                 className="btn-secondary"
@@ -737,6 +827,73 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {confirmRequest && (
+        <CheckerConfirm
+          key={confirmRequest.key}
+          request={confirmRequest}
+          defaultName={checkerName}
+          onCancel={() => setConfirmRequest(null)}
+          onConfirm={runConfirmRequest}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * 처리 전에 담당자 이름을 받는 확인창.
+ * window.confirm 은 눌렀다는 사실만 남기고 누가 눌렀는지는 못 남긴다 — 그래서 직접 만든다.
+ */
+function CheckerConfirm({ request, defaultName, onCancel, onConfirm }) {
+  const [name, setName] = useState(defaultName || '');
+  const [busy, setBusy] = useState(false);
+  // 저장이 막혔는데 버튼만 다시 살아나면 "눌렀는데 안 되네"가 된다
+  const [error, setError] = useState(null);
+
+  const submit = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm(trimmed);
+    } catch (e) {
+      setError(e?.message || '처리하지 못했습니다.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay checker-confirm-overlay" onClick={onCancel}>
+      <div className="modal checker-confirm" onClick={(e) => e.stopPropagation()}>
+        <h3>{request.title}</h3>
+        <p className="checker-confirm-target">{request.target}</p>
+        <p className="checker-confirm-detail">{request.detail}</p>
+        <label>
+          담당자
+          <input
+            type="text"
+            value={name}
+            placeholder="이름을 적어주세요"
+            autoFocus
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submit();
+            }}
+          />
+        </label>
+        {error && <p className="delete-error">⚠️ {error}</p>}
+        <div className="modal-actions">
+          <button className="btn-secondary" onClick={onCancel} disabled={busy}>
+            취소
+          </button>
+          <button className="btn-primary" onClick={submit} disabled={!name.trim() || busy}>
+            {busy ? '처리 중...' : '담당자 확인'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -781,7 +938,7 @@ function DetailSection({ title, items, resolved, empty, onResolve, onUndo }) {
               <span className="item-main">
                 <span className="resolved-text">{it.text}</span>
                 <span className="item-variants">
-                  해결 처리됨 · 매장이 다시 올리면 되살아납니다
+                  {resolvedNote(it.resolution, '해결 처리됨')}
                 </span>
               </span>
               {onUndo && it.resolution?.id && (

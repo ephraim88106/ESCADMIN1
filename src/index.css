@@ -3060,6 +3060,40 @@ body {
   color: #16a34a;
 }
 
+/* 담당자 확인창 — 지점 모달 위에 겹쳐 뜬다 */
+.checker-confirm-overlay {
+  z-index: 300;
+}
+
+.checker-confirm-target {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.checker-confirm-detail {
+  margin: 4px 0 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.store-confirm-done {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 13px;
+  border-left: 3px solid #16a34a;
+}
+
+.store-confirm-btn {
+  width: 100%;
+}
+
 .resolved-list {
   margin-top: 6px;
   padding-top: 6px;
