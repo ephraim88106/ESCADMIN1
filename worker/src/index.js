@@ -131,6 +131,38 @@ export default {
   // 설정이 제대로 됐는지 눈으로 확인하는 용도. 비밀값은 내보내지 않는다.
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // 설치할 때 한 번 쓰는 열쇠 만들기.
+    // 부를 때마다 새로 만들어 보여줄 뿐 어디에도 저장하지 않는다 —
+    // 그래서 실제로 쓰고 있는 열쇠와는 아무 상관이 없다.
+    if (url.pathname === '/genkey') {
+      const pair = await crypto.subtle.generateKey(
+        { name: 'ECDSA', namedCurve: 'P-256' },
+        true,
+        ['sign', 'verify']
+      );
+      const raw = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
+      let binary = '';
+      for (let i = 0; i < raw.length; i += 1) binary += String.fromCharCode(raw[i]);
+      const publicKey = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const { d: privateKey } = await crypto.subtle.exportKey('jwk', pair.privateKey);
+      return new Response(
+        [
+          '=== 새 열쇠 한 쌍 ===',
+          '',
+          '① 비밀 열쇠 — Cloudflare 설정의 VAPID_PRIVATE_KEY 에 넣으세요.',
+          '   (남에게 보여주면 안 됩니다)',
+          `   ${privateKey}`,
+          '',
+          '② 공개 열쇠 — 이건 공개돼도 안전합니다. 그대로 알려주시면 앱에 넣습니다.',
+          `   ${publicKey}`,
+          '',
+          '넣고 나면 이 주소는 다시 안 쓰셔도 됩니다.',
+        ].join('\n'),
+        { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+      );
+    }
+
     if (url.pathname !== '/health') {
       return new Response('ESC Admin 인수인계 푸시 발송기 — 1분마다 자동 실행됩니다.', {
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
