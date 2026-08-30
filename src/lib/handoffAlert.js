@@ -89,7 +89,7 @@ export function showBrowserNotification({ title, body, tag, onClick }) {
     const n = new Notification(title, {
       body,
       tag,
-      icon: `${import.meta.env.BASE_URL}favicon.svg`,
+      icon: `${import.meta.env.BASE_URL}icon-192.png`,
     });
     n.onclick = () => {
       window.focus();
