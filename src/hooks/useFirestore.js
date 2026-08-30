@@ -13,6 +13,7 @@ import {
 import { db, isFirebaseConfigured } from '../firebase';
 import { STORES } from '../data/stores';
 import { markSelfHandoff } from '../lib/handoffAlert';
+import { getDeviceId } from '../lib/deviceId';
 
 // localStorage 기반 폴백 (Firebase 미설정 시)
 function getLocalData(key) {
@@ -293,7 +294,7 @@ export function useHandoffs(storeId) {
 
   const addHandoff = async (data, targetStoreId) => {
     const sid = targetStoreId || storeId;
-    const entry = { ...data, storeId: sid, createdAt: Date.now() };
+    const entry = { ...data, storeId: sid, createdAt: Date.now(), deviceId: getDeviceId() };
     if (isFirebaseConfigured) {
       const ref = await addDoc(collection(db, 'handoffs'), entry);
       markSelfHandoff(ref.id); // 내가 쓴 글로 나한테 알림이 오면 안 된다
@@ -399,6 +400,7 @@ export function useAllHandoffs() {
           ...data,
           storeId,
           createdAt: Date.now(),
+          deviceId: getDeviceId(),
         });
         markSelfHandoff(ref.id);
         mode = 'created';
@@ -415,7 +417,7 @@ export function useAllHandoffs() {
       } else {
         const id = generateId();
         markSelfHandoff(id);
-        list.push({ id, ...data, storeId, createdAt: Date.now() });
+        list.push({ id, ...data, storeId, createdAt: Date.now(), deviceId: getDeviceId() });
         setLocalData(key, list);
         mode = 'created';
       }

@@ -1,0 +1,14 @@
+{
+  "name": "escadmin-handoff-push",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "vapid": "node scripts/gen-vapid.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

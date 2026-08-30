@@ -36,3 +36,14 @@ npx eslint <수정한 파일>
   담당자 이름처럼 처리할 때 받아야 하는 값은
   `components/CheckerConfirm.jsx` 확인창으로 받는다.
 - 입력값은 주변 코드처럼 `onChange`에서 바로 저장한다 (메모·날짜 칸과 동일).
+
+## 알림
+
+인수인계 알림은 두 벌로 나뉜다. 고칠 때 어느 쪽인지 보고 손댄다.
+
+- **앱이 켜져 있을 때** — `hooks/useHandoffAlerts.js`, `components/HandoffToasts.jsx`.
+  전 매장 `handoffs` 구독에서 새 글을 잡아 화면 알림·소리·브라우저 알림을 낸다.
+- **앱이 꺼져 있을 때** — `worker/` (Cloudflare Worker). 이 저장소와 따로 배포된다.
+  `npm run build` 나 GitHub Pages 배포로는 안 올라가니 `worker/README.md` 를 본다.
+
+`src/data/pushConfig.js` 의 공개키가 비어 있으면 휴대폰 알림 기능은 화면에 뜨지 않는다.

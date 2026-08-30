@@ -2,14 +2,18 @@ import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useParams, useLocation } from 'react-router-dom';
 import { STORES, getStoreById } from '../data/stores';
 import { useHandoffAlerts } from '../hooks/useHandoffAlerts';
+import { usePushSubscription } from '../hooks/usePushSubscription';
 import { notificationSupported } from '../lib/handoffAlert';
+import { ALL_STORES } from '../lib/webPush';
 import HandoffToasts from './HandoffToasts';
+import PushSubscribeModal from './PushSubscribeModal';
 
 export default function Layout() {
   const { storeId } = useParams();
   const location = useLocation();
   const currentStore = storeId ? getStoreById(storeId) : null;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pushModalOpen, setPushModalOpen] = useState(false);
 
   // 지금 이 지점 인수인계 화면을 보고 있으면 그 지점 알림은 띄우지 않는다 — 목록에 바로 나온다
   const viewingHandoffStoreId = location.pathname.endsWith('/board/handoff') ? storeId : null;
@@ -25,6 +29,13 @@ export default function Layout() {
     soundOn,
     toggleSound,
   } = useHandoffAlerts(viewingHandoffStoreId);
+
+  const push = usePushSubscription();
+  const pushLabel = !push.subscribed
+    ? '📱 휴대폰 알림 받기'
+    : push.stores.includes(ALL_STORES)
+      ? '📱 휴대폰 알림 — 전 지점'
+      : `📱 휴대폰 알림 — ${push.stores.length}개 지점`;
 
   // 페이지 이동 시 메뉴 닫기
   useEffect(() => {
@@ -61,6 +72,21 @@ export default function Layout() {
       <aside className={`sidebar${menuOpen ? ' open' : ''}`}>
         <h1 className="logo">ESC Admin</h1>
         <div className="alert-settings">
+          {push.configured && push.supported && (
+            <button
+              type="button"
+              className={push.subscribed ? 'alert-sound-btn' : 'alert-enable-btn'}
+              onClick={() => setPushModalOpen(true)}
+            >
+              {pushLabel}
+            </button>
+          )}
+          {push.configured && !push.supported && push.needsHomeScreen && (
+            <p className="alert-hint">
+              📱 아이폰은 공유 버튼 → &lsquo;홈 화면에 추가&rsquo;를 하면, 앱을 껐어도 알림을 받을 수
+              있습니다.
+            </p>
+          )}
           {notificationSupported && permission === 'default' && (
             <button type="button" className="alert-enable-btn" onClick={enableNotifications}>
               🔔 새 인수인계 알림 켜기
@@ -131,6 +157,22 @@ export default function Layout() {
       </main>
 
       <HandoffToasts toasts={toasts} onDismiss={dismissToast} />
+
+      {pushModalOpen && (
+        <PushSubscribeModal
+          subscribed={push.subscribed}
+          stores={push.stores}
+          busy={push.busy}
+          error={push.error}
+          onEnable={async (next) => {
+            if (await push.enable(next)) setPushModalOpen(false);
+          }}
+          onDisable={async () => {
+            if (await push.disable()) setPushModalOpen(false);
+          }}
+          onClose={() => setPushModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
