@@ -89,11 +89,11 @@ export default function Layout() {
           )}
           {notificationSupported && permission === 'default' && (
             <button type="button" className="alert-enable-btn" onClick={enableNotifications}>
-              🔔 새 인수인계 알림 켜기
+              🔔 브라우저 알림 켜기
             </button>
           )}
           {notificationSupported && permission === 'granted' && (
-            <p className="alert-hint">🔔 새 인수인계 알림 켜짐</p>
+            <p className="alert-hint">🔔 브라우저 알림 켜짐</p>
           )}
           {notificationSupported && permission === 'denied' && (
             <p className="alert-hint">
