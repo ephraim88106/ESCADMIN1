@@ -8,6 +8,9 @@ import { buildAliasMap } from '../lib/itemName';
 import PasteBox from '../components/PasteBox';
 import CheckerConfirm from '../components/CheckerConfirm';
 
+// 지점 상세에서 기본으로 펼쳐두는 보고 개수. 나머지는 '더 보기'로 접는다.
+const RECENT_REPORTS = 2;
+
 const REASON_CLASS = {
   missing: 'reason-missing',
   none: 'reason-none',
@@ -155,6 +158,8 @@ export default function Dashboard() {
   const { items: master } = useItems();
   const [showPaste, setShowPaste] = useState(false);
   const [selected, setSelected] = useState(null);
+  // 등록된 보고는 쌓일수록 길어져 아래 항목이 안 보인다. 최근 것만 두고 나머지는 접는다.
+  const [showAllReports, setShowAllReports] = useState(false);
   const [showAll, setShowAll] = useState(true);
   // 삭제가 실패해도 지금까지는 화면에 아무 표시가 없었다 → "눌렀는데 안 되네"가 됐다
   const [deleteError, setDeleteError] = useState(null);
@@ -449,7 +454,10 @@ export default function Dashboard() {
             <li
               key={s.store.id}
               className={`patrol-item ${cardClass(s)}`}
-              onClick={() => setSelected(s.store.id)}
+              onClick={() => {
+                setSelected(s.store.id);
+                setShowAllReports(false);
+              }}
             >
               <span className="patrol-rank">{idx + 1}</span>
               <div className="patrol-body">
@@ -768,11 +776,26 @@ export default function Dashboard() {
                 <p className="store-modal-empty">없음</p>
               ) : (
                 <ul className="order-quick-list">
-                  {selectedStatus.reportList.map((r) => (
+                  {(showAllReports
+                    ? selectedStatus.reportList
+                    : selectedStatus.reportList.slice(0, RECENT_REPORTS)
+                  ).map((r) => (
                     <li key={r.id} className="order-quick-item">
                       <span className="item-main">
                         <span>
-                          {r.dateKey}
+                          <button
+                            type="button"
+                            className="report-date-link"
+                            title="이 날짜 보고로 이동"
+                            onClick={() => {
+                              setSelected(null);
+                              navigate(
+                                `/store/${selectedStatus.store.id}/board/handoff?report=${r.id}`
+                              );
+                            }}
+                          >
+                            {r.dateKey}
+                          </button>
                           {r.formatVersion !== 'v3' && (
                             <span className="report-flag">구양식</span>
                           )}
@@ -792,6 +815,17 @@ export default function Dashboard() {
                     </li>
                   ))}
                 </ul>
+              )}
+              {selectedStatus.reportList.length > RECENT_REPORTS && (
+                <button
+                  type="button"
+                  className="report-more-btn"
+                  onClick={() => setShowAllReports((v) => !v)}
+                >
+                  {showAllReports
+                    ? '접기'
+                    : `+ ${selectedStatus.reportList.length - RECENT_REPORTS}건 더 보기`}
+                </button>
               )}
             </div>
 

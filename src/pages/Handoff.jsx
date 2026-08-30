@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getStoreById, detectStoreFromText } from '../data/stores';
 import { useHandoffs, useNotices, useInventory, useOrders } from '../hooks/useFirestore';
 import { parseHandoffText, LABEL_ICONS } from '../lib/parseHandoff';
@@ -79,6 +79,9 @@ function formatTime(ts) {
 export default function Handoff() {
   const { storeId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  // 대시보드에서 특정 날짜 보고를 눌러 들어온 경우 (?report=<id>)
+  const highlightId = new URLSearchParams(location.search).get('report');
   const store = getStoreById(storeId);
   const { handoffs, loading, addHandoff, updateHandoff, removeHandoff } =
     useHandoffs(storeId);
@@ -97,6 +100,8 @@ export default function Handoff() {
   const [editingId, setEditingId] = useState(null);
   const [draftSavedMsg, setDraftSavedMsg] = useState(false);
   const restoredRef = useRef(false);
+  // 같은 카드로 두 번 스크롤하지 않게 어디까지 옮겼는지 기억한다
+  const scrolledToRef = useRef(null);
 
   // 매장이 바뀔 때마다 그 매장의 임시저장을 불러오고, 없으면 폼을 비운다
   useEffect(() => {
@@ -376,13 +381,28 @@ export default function Handoff() {
     }
   };
 
+  const isExpanded = (id) => expandedIds.has(id) || id === highlightId;
+
   const toggleExpanded = (id) => {
+    // 링크로 펼쳐진 카드를 접을 때는 주소에 남은 표시도 같이 지운다.
+    // 안 지우면 계속 펼쳐진 채로 되돌아온다.
+    if (id === highlightId) {
+      navigate(`/store/${storeId}/board/handoff`, { replace: true });
+      return;
+    }
     setExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  };
+
+  /** 링크로 지목된 카드가 화면에 그려지면 그리로 옮겨준다 */
+  const highlightRef = (el) => {
+    if (!el || scrolledToRef.current === highlightId) return;
+    scrolledToRef.current = highlightId;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   const renderSections = (handoff, editable) => (
@@ -603,7 +623,11 @@ export default function Handoff() {
       ) : (
         <>
           {pending.map((h) => (
-            <div key={h.id} className={`handoff-card pending-card${h.duplicateOfDate ? ' duplicate-card' : ''}`}>
+            <div
+              key={h.id}
+              ref={h.id === highlightId ? highlightRef : undefined}
+              className={`handoff-card pending-card${h.duplicateOfDate ? ' duplicate-card' : ''}${h.id === highlightId ? ' linked-card' : ''}`}
+            >
               <div className="handoff-card-header">
                 <div>
                   <span className="handoff-status pending">확인 대기</span>
@@ -659,7 +683,11 @@ export default function Handoff() {
                 </button>
               </div>
               {history.map((h) => (
-                <div key={h.id} className={`handoff-card history-card${h.duplicateOfDate ? ' duplicate-card' : ''}`}>
+                <div
+                  key={h.id}
+                  ref={h.id === highlightId ? highlightRef : undefined}
+                  className={`handoff-card history-card${h.duplicateOfDate ? ' duplicate-card' : ''}${h.id === highlightId ? ' linked-card' : ''}`}
+                >
                   <div className="handoff-card-header clickable" onClick={() => toggleExpanded(h.id)}>
                     <div>
                       <span className="handoff-status done">확인 완료</span>
@@ -675,10 +703,10 @@ export default function Handoff() {
                     <div className="history-actions" onClick={(e) => e.stopPropagation()}>
                       <button className="btn-sm" onClick={() => handleEditStart(h)}>수정</button>
                       <button className="btn-sm btn-danger" onClick={() => handleDelete(h)}>삭제</button>
-                      <span className="expand-icon" onClick={() => toggleExpanded(h.id)}>{expandedIds.has(h.id) ? '▲' : '▼'}</span>
+                      <span className="expand-icon" onClick={() => toggleExpanded(h.id)}>{isExpanded(h.id) ? '▲' : '▼'}</span>
                     </div>
                   </div>
-                  {expandedIds.has(h.id) && (
+                  {isExpanded(h.id) && (
                     <>
                       {h.rawText && (
                         <div className="raw-text-box">
