@@ -174,8 +174,12 @@ export default {
         readCursor(client),
         fetchSubscriptions(client),
       ]);
+      const hasPublic = Boolean(env.VAPID_PUBLIC_KEY);
+      const hasPrivate = Boolean(env.VAPID_PRIVATE_KEY);
       return Response.json({
-        vapid: Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
+        vapid: hasPublic && hasPrivate,
+        공개열쇠: hasPublic ? '있음' : '없음 — wrangler.toml 의 VAPID_PUBLIC_KEY',
+        비밀열쇠: hasPrivate ? '있음' : '없음 — Worker 설정에 VAPID_PRIVATE_KEY 를 Secret 으로',
         cursor: cursor === null ? '아직 없음 (첫 실행 전)' : new Date(cursor).toISOString(),
         subscriptions: subscriptions.length,
       });

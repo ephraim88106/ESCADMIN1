@@ -12,3 +12,5 @@ crons = ["* * * * *"]
 FIREBASE_PROJECT_ID = "escadmin-c7655"
 FIREBASE_API_KEY = "AIzaSyBYkUHgM9Xk9cwRrinOCJ7RvcYGyJeYapE"
 VAPID_SUBJECT = "mailto:namho1123@gmail.com"
+# 앱(src/data/pushConfig.js)에 들어간 것과 같은 값이어야 한다. 공개 열쇠라 비밀이 아니다.
+VAPID_PUBLIC_KEY = "BHrxN1L-t5kyrG7VhCGd5W8iSE7UouW9en6SfigQffM-UsINz-pEw5IGH9cb_bKE7yAkaGALChKxOS3nNrJRqMw"
