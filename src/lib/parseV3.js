@@ -266,15 +266,15 @@ export function parseV3(text, baseTime = Date.now()) {
 const SEAT_TOKEN = /^\d+\s*번?$/;
 
 /**
- * 온점으로 적어 보내는 곳이 있어서 쉼표와 같이 받는다 (`11. 37. 9`).
+ * 쉼표 말고도 온점(`11. 37. 9`)이나 띄어쓰기(`11 37 9`)만으로 적어 보내는 곳이 있다.
  *
- * 다만 무턱대고 자르면 `8.1~8.31` 같은 날짜까지 쪼개진다.
+ * 다만 무턱대고 자르면 `11번 (8.1~8.31)` 같은 줄까지 조각난다.
  * 그래서 나눈 조각이 전부 자리 번호 꼴일 때만 나눈다.
  */
-function splitByDot(chunk) {
-  if (!chunk.includes('.')) return [chunk];
+function splitLoose(chunk) {
+  if (!/[.\s]/.test(chunk)) return [chunk];
   const parts = chunk
-    .split('.')
+    .split(/[.\s]+/)
     .map((p) => p.trim())
     .filter(Boolean);
   if (parts.length === 0 || !parts.every((p) => SEAT_TOKEN.test(p))) return [chunk];
@@ -295,7 +295,7 @@ function seatNumber(text) {
 export function splitSeats(lines) {
   const items = lines
     .flatMap((l) => l.split(/[,，]/))
-    .flatMap(splitByDot)
+    .flatMap(splitLoose)
     .map((s) => s.trim())
     .filter(Boolean);
 
