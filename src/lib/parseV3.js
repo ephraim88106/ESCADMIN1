@@ -262,11 +262,53 @@ export function parseV3(text, baseTime = Date.now()) {
   };
 }
 
-function splitSeats(lines) {
-  return lines
+/** `11` `11번` 처럼 자리 번호 하나로만 읽히는 조각 */
+const SEAT_TOKEN = /^\d+\s*번?$/;
+
+/**
+ * 온점으로 적어 보내는 곳이 있어서 쉼표와 같이 받는다 (`11. 37. 9`).
+ *
+ * 다만 무턱대고 자르면 `8.1~8.31` 같은 날짜까지 쪼개진다.
+ * 그래서 나눈 조각이 전부 자리 번호 꼴일 때만 나눈다.
+ */
+function splitByDot(chunk) {
+  if (!chunk.includes('.')) return [chunk];
+  const parts = chunk
+    .split('.')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0 || !parts.every((p) => SEAT_TOKEN.test(p))) return [chunk];
+  return parts;
+}
+
+function seatNumber(text) {
+  const m = String(text).match(/\d+/);
+  return m ? parseInt(m[0], 10) : null;
+}
+
+/**
+ * 자리 번호를 나누고 작은 수부터 세운다.
+ *
+ * 적어 보내는 순서가 제각각이라 그대로 두면 눈으로 훑기 어렵다.
+ * 숫자로 안 읽히는 표기(`없음` 등)는 순서를 건드리지 않고 뒤에 둔다.
+ */
+export function splitSeats(lines) {
+  const items = lines
     .flatMap((l) => l.split(/[,，]/))
+    .flatMap(splitByDot)
     .map((s) => s.trim())
     .filter(Boolean);
+
+  const numbered = [];
+  const others = [];
+  items.forEach((item, index) => {
+    const n = seatNumber(item);
+    if (n === null) others.push(item);
+    else numbered.push({ item, n, index });
+  });
+  numbered.sort((a, b) => a.n - b.n || a.index - b.index);
+
+  return [...numbered.map((x) => x.item), ...others];
 }
 
 /** 기존 인수인계 UI가 쓰는 sections 배열로 변환 (표시 호환용) */

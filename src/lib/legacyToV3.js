@@ -10,6 +10,7 @@
 // 다음날부터 그 텍스트를 고쳐 쓰면 양식이 저절로 정착한다.
 
 import { parseLegacy } from './parseLegacy';
+import { splitSeats } from './parseV3';
 import { detectStoreFromText } from '../data/stores';
 
 export const V3_FIELDS = [
@@ -111,13 +112,8 @@ export function legacyToDraft(text, now = new Date()) {
   const fields = Object.fromEntries(V3_FIELDS.map((f) => [f.key, '']));
   const notes = [];
 
-  // 고정석 / 빈자리 — 쉼표 나열로 정리
-  const seats = (raw) =>
-    toLines(raw)
-      .flatMap((l) => l.split(/[,，]/))
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .join(', ');
+  // 고정석 / 빈자리 — 쉼표 나열로 정리 (온점 구분과 정렬은 parseV3 와 같은 규칙)
+  const seats = (raw) => splitSeats(toLines(raw)).join(', ');
 
   fields.고정석 = seats(get('고정석'));
   fields.빈자리 = seats(get('빈자리'));
