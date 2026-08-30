@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
 import { STORES } from '../data/stores';
+import { markSelfHandoff } from '../lib/handoffAlert';
 
 // localStorage 기반 폴백 (Firebase 미설정 시)
 function getLocalData(key) {
@@ -45,7 +46,7 @@ function generateId() {
  * archive() 는 useTrash 바깥에서 쓰기 때문에, 알려주지 않으면 휴지통이 갱신되지 않는다.
  */
 const TRASH_EVENT = 'esc:trash-changed';
-const HANDOFF_EVENT = 'esc:handoffs-changed';
+export const HANDOFF_EVENT = 'esc:handoffs-changed';
 
 function notify(name) {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(name));
@@ -294,12 +295,17 @@ export function useHandoffs(storeId) {
     const sid = targetStoreId || storeId;
     const entry = { ...data, storeId: sid, createdAt: Date.now() };
     if (isFirebaseConfigured) {
-      return addDoc(collection(db, 'handoffs'), entry);
+      const ref = await addDoc(collection(db, 'handoffs'), entry);
+      markSelfHandoff(ref.id); // 내가 쓴 글로 나한테 알림이 오면 안 된다
+      return ref;
     }
     const key = targetStoreId ? `handoffs_${targetStoreId}` : localKey;
     const list = getLocalData(key);
-    list.push({ id: generateId(), ...entry });
+    const id = generateId();
+    markSelfHandoff(id);
+    list.push({ id, ...entry });
     setLocalData(key, list);
+    notifyHandoffs();
     if (!targetStoreId || targetStoreId === storeId) refreshLocal();
   };
 
@@ -389,11 +395,12 @@ export function useAllHandoffs() {
         });
         mode = 'updated';
       } else {
-        await addDoc(collection(db, 'handoffs'), {
+        const ref = await addDoc(collection(db, 'handoffs'), {
           ...data,
           storeId,
           createdAt: Date.now(),
         });
+        markSelfHandoff(ref.id);
         mode = 'created';
       }
     } else {
@@ -406,10 +413,13 @@ export function useAllHandoffs() {
         setLocalData(key, next);
         mode = 'updated';
       } else {
-        list.push({ id: generateId(), ...data, storeId, createdAt: Date.now() });
+        const id = generateId();
+        markSelfHandoff(id);
+        list.push({ id, ...data, storeId, createdAt: Date.now() });
         setLocalData(key, list);
         mode = 'created';
       }
+      notifyHandoffs();
       refreshLocal();
     }
 
