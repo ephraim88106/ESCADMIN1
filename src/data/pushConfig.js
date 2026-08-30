@@ -7,4 +7,5 @@
  * 만드는 법: worker/README.md 참고 (`node scripts/gen-vapid.mjs`)
  * 비어 있으면 휴대폰 알림 기능이 화면에 뜨지 않는다.
  */
-export const VAPID_PUBLIC_KEY = '';
+export const VAPID_PUBLIC_KEY =
+  'BHrxN1L-t5kyrG7VhCGd5W8iSE7UouW9en6SfigQffM-UsINz-pEw5IGH9cb_bKE7yAkaGALChKxOS3nNrJRqMw';
