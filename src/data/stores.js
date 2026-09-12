@@ -3,10 +3,10 @@
 // aliases: 카톡 문자에 실제로 쓰이는 표기를 모두 등록한다.
 // (예: "영종점" / "영종하늘도시점" 둘 다 같은 매장으로 인식되어야 함)
 export const STORES = [
-  { id: 'geomam', name: '검암점', aliases: ['검암'] },
+  { id: 'geomam', name: '검암점', aliases: ['검암'], manager: '김남윤' },
   { id: 'sangdong', name: '상동점', aliases: ['상동'], manager: '김남윤' },
   { id: 'dohwa', name: '도화점', aliases: ['도화'], manager: '송영준' },
-  { id: 'songdo', name: '송도점', aliases: ['송도'] },
+  { id: 'songdo', name: '송도점', aliases: ['송도'], manager: '김용제' },
   { id: 'banghwa', name: '강서방화점', aliases: ['강서방화', '방화'], manager: '박준' },
   { id: 'yeongjong', name: '영종하늘도시점', aliases: ['영종하늘도시', '하늘도시', '영종'], manager: '송영준' },
   { id: 'hwagok', name: '화곡점', aliases: ['화곡'], manager: '박준' },
