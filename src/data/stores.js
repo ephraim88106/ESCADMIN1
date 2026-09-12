@@ -1,24 +1,25 @@
 // 17개 매장 마스터.
+// manager: 주문담당자. 없으면 화면에 표시하지 않는다.
 // aliases: 카톡 문자에 실제로 쓰이는 표기를 모두 등록한다.
 // (예: "영종점" / "영종하늘도시점" 둘 다 같은 매장으로 인식되어야 함)
 export const STORES = [
   { id: 'geomam', name: '검암점', aliases: ['검암'] },
-  { id: 'sangdong', name: '상동점', aliases: ['상동'] },
-  { id: 'dohwa', name: '도화점', aliases: ['도화'] },
+  { id: 'sangdong', name: '상동점', aliases: ['상동'], manager: '김남윤' },
+  { id: 'dohwa', name: '도화점', aliases: ['도화'], manager: '송영준' },
   { id: 'songdo', name: '송도점', aliases: ['송도'] },
-  { id: 'banghwa', name: '강서방화점', aliases: ['강서방화', '방화'] },
-  { id: 'yeongjong', name: '영종하늘도시점', aliases: ['영종하늘도시', '하늘도시', '영종'] },
-  { id: 'hwagok', name: '화곡점', aliases: ['화곡'] },
-  { id: 'juan', name: '주안점', aliases: ['주안'] },
-  { id: 'nonhyeon', name: '논현점', aliases: ['논현'] },
-  { id: 'wondang', name: '원당점', aliases: ['원당'] },
-  { id: 'sinjungdong', name: '신중동점', aliases: ['신중동'] },
-  { id: 'bakchon', name: '박촌점', aliases: ['박촌'] },
-  { id: 'seogucheong', name: '서구청점', aliases: ['서구청'] },
-  { id: 'gwangyo', name: '관교점', aliases: ['관교'] },
-  { id: 'dongchun', name: '동춘점', aliases: ['동춘'] },
-  { id: 'gyeyang', name: '계양점', aliases: ['계양'] },
-  { id: 'ganseok', name: '간석점', aliases: ['간석'] },
+  { id: 'banghwa', name: '강서방화점', aliases: ['강서방화', '방화'], manager: '박준' },
+  { id: 'yeongjong', name: '영종하늘도시점', aliases: ['영종하늘도시', '하늘도시', '영종'], manager: '송영준' },
+  { id: 'hwagok', name: '화곡점', aliases: ['화곡'], manager: '박준' },
+  { id: 'juan', name: '주안점', aliases: ['주안'], manager: '박준' },
+  { id: 'nonhyeon', name: '논현점', aliases: ['논현'], manager: '박준' },
+  { id: 'wondang', name: '원당점', aliases: ['원당'], manager: '박준' },
+  { id: 'sinjungdong', name: '신중동점', aliases: ['신중동'], manager: '김남윤' },
+  { id: 'bakchon', name: '박촌점', aliases: ['박촌'], manager: '김남윤' },
+  { id: 'seogucheong', name: '서구청점', aliases: ['서구청'], manager: '박용현' },
+  { id: 'gwangyo', name: '관교점', aliases: ['관교'], manager: '박준' },
+  { id: 'dongchun', name: '동춘점', aliases: ['동춘'], manager: '박준' },
+  { id: 'gyeyang', name: '계양점', aliases: ['계양'], manager: '김남윤' },
+  { id: 'ganseok', name: '간석점', aliases: ['간석'], manager: '박용현' },
 ];
 
 export function getStoreById(id) {
@@ -66,4 +67,8 @@ export function detectStoreFromText(text) {
   }
 
   return matchAlias(firstLine) || matchAlias(text);
+}
+
+export function getStoreManager(id) {
+  return getStoreById(id)?.manager ?? null;
 }

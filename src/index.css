@@ -3288,6 +3288,21 @@ body {
   gap: 8px;
 }
 
+/* 매장명 옆 주문담당자. 매장명이 주인공이므로 작고 흐리게 둔다. */
+.store-link-name {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.store-manager {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
 .nav-unread {
   background: var(--danger);
   color: #fff;

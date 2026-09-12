@@ -463,6 +463,7 @@ export default function Dashboard() {
               <div className="patrol-body">
                 <div className="patrol-name">
                   {s.store.name}
+                  {s.store.manager && <span className="store-manager">· {s.store.manager}</span>}
                   {s.maxAge > 0 && <AgeTag age={s.maxAge} />}
                 </div>
                 <div className="patrol-reasons">

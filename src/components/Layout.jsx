@@ -120,7 +120,10 @@ export default function Layout() {
                 `nav-item store-link${isActive || storeId === store.id ? ' active' : ''}`
               }
             >
-              {store.name}
+              <span className="store-link-name">
+                {store.name}
+                {store.manager && <span className="store-manager">· {store.manager}</span>}
+              </span>
               {unreadByStore[store.id] > 0 && (
                 <span className="nav-unread">{unreadByStore[store.id]}</span>
               )}
