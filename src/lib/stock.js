@@ -106,14 +106,36 @@ export function buildStoreStock(handoffs, aliasMap, today) {
  *   reorder    문자의 ■주문을 품목별로 묶은 발주 목록 (발주 필요 / 미도착 구분)
  *   rawNames   문자에 실제로 등장한 원본 품목명 (별칭 정리 화면용)
  */
-export function buildStockView(stores, handoffsByStore, items, aliasMap, today = todayKey()) {
+export function buildStockView(
+  stores,
+  handoffsByStore,
+  items,
+  aliasMap,
+  today = todayKey(),
+  resolutionsByStore = {}
+) {
   const storeInfo = {};
   const rawNames = new Set();
 
   for (const store of stores) {
-    storeInfo[store.id] = buildStoreStock(handoffsByStore[store.id] || [], aliasMap, today);
-    for (const [, v] of storeInfo[store.id].stock) rawNames.add(v.raw);
-    for (const o of storeInfo[store.id].pendingOrders) rawNames.add(o.raw);
+    const info = buildStoreStock(handoffsByStore[store.id] || [], aliasMap, today);
+
+    // 발주완료를 누른 품목은 목록에서 내린다.
+    // 매장이 ■주문에 계속 올려도 되살리지 않는다 — 안 시켰다는 뜻이 아니라 아직 안 왔다는 뜻이다.
+    // 지점 모달(buildStoreReorder)이 쓰던 규칙을 전사 화면에도 그대로 적용한다.
+    const orderOpts = { arrivals: info.arrivals, today };
+    const res = resolutionsByStore[store.id] || [];
+    const newSplit = applyOrderResolutions(info.newOrders, res, orderOpts);
+    const prevSplit = applyOrderResolutions(info.prevOrders, res, orderOpts);
+
+    info.openNew = newSplit.open;
+    info.openPrev = prevSplit.open;
+    info.waiting = [...newSplit.waiting, ...prevSplit.waiting];
+    info.arrived = [...newSplit.arrived, ...prevSplit.arrived];
+
+    storeInfo[store.id] = info;
+    for (const [, v] of info.stock) rawNames.add(v.raw);
+    for (const o of info.pendingOrders) rawNames.add(o.raw);
   }
 
   // 등장한 모든 대표 품목명 수집
@@ -132,12 +154,18 @@ export function buildStockView(stores, handoffsByStore, items, aliasMap, today =
     for (const store of stores) {
       const info = storeInfo[store.id];
       const entry = info.stock.get(name) || null;
-      const order = info.pendingOrders.find((o) => o.name === name) || null;
+      // 열린 발주만 '발주'로 센다. 이미 시킨 건(도착 대기)은 따로 표시한다.
+      const order =
+        info.openNew.find((o) => o.name === name) ||
+        info.openPrev.find((o) => o.name === name) ||
+        null;
+      const waiting = order ? null : info.waiting.find((o) => o.name === name) || null;
 
-      if (entry || order) usedBy += 1;
+      if (entry || order || waiting) usedBy += 1;
 
       const low = entry ? entry.qty < threshold : false;
-      if (low && !order) lowCount += 1;
+      // 이미 시켜둔 것도 '부족한데 방치된 것'은 아니다. 급한 순 정렬에서 뺀다.
+      if (low && !order && !waiting) lowCount += 1;
 
       cells[store.id] = {
         qty: entry ? entry.qty : null,
@@ -146,6 +174,7 @@ export function buildStockView(stores, handoffsByStore, items, aliasMap, today =
         missing: info.reported && !entry,
         notReported: !info.reported,
         order,
+        waiting,
         low,
       };
     }
@@ -172,8 +201,8 @@ export function buildStockView(stores, handoffsByStore, items, aliasMap, today =
   };
   for (const store of stores) {
     const info = storeInfo[store.id];
-    for (const o of info.newOrders) add(store, o, 'new');
-    for (const o of info.prevOrders) add(store, o, 'pending');
+    for (const o of info.openNew) add(store, o, 'new');
+    for (const o of info.openPrev) add(store, o, 'pending');
   }
 
   const reorder = [...grouped.values()].sort((a, b) => {
@@ -182,7 +211,14 @@ export function buildStockView(stores, handoffsByStore, items, aliasMap, today =
     return oldest(b) - oldest(a) || pend(b) - pend(a) || b.stores.length - a.stores.length;
   });
 
-  return { items: rows, reorder, rawNames: [...rawNames], storeInfo };
+  // 목록에서 뺀 건 사라진 게 아니라 기다리는 중이다. 몇 건인지는 보여준다.
+  const waiting = [];
+  for (const store of stores) {
+    for (const o of storeInfo[store.id].waiting) waiting.push({ store, ...o });
+  }
+  waiting.sort((a, b) => (b.waitingDays ?? 0) - (a.waitingDays ?? 0));
+
+  return { items: rows, reorder, waiting, rawNames: [...rawNames], storeInfo };
 }
 
 /**

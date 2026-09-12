@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { STORES } from '../data/stores';
-import { useAllHandoffs, useItems } from '../hooks/useFirestore';
+import { useAllHandoffs, useItems, useResolutions } from '../hooks/useFirestore';
 import { buildStockView, reorderToText, waitLabel, DEFAULT_THRESHOLD } from '../lib/stock';
 import { buildAliasMap, canonicalName, itemKey, suggestMerges } from '../lib/itemName';
-import { todayKey } from '../lib/patrol';
+import { THRESHOLDS, todayKey } from '../lib/patrol';
+
+// 발주완료한 뒤 이 일수가 지나도 ■입고가 없으면 다시 목록에 올린다 (지점 모달과 같은 값)
+const WAIT_DAYS = THRESHOLDS.orderWaitDays;
 
 const TABS = [
   { key: 'reorder', label: '발주 필요' },
@@ -14,13 +17,14 @@ const TABS = [
 
 export default function Stock() {
   const { byStore, loading } = useAllHandoffs();
+  const { byStore: resolutionsByStore } = useResolutions();
   const { items: master, mergeInto, unmerge, setThreshold } = useItems();
   const [tab, setTab] = useState('reorder');
 
   const aliasMap = useMemo(() => buildAliasMap(master), [master]);
   const view = useMemo(
-    () => buildStockView(STORES, byStore, master, aliasMap, todayKey()),
-    [byStore, master, aliasMap]
+    () => buildStockView(STORES, byStore, master, aliasMap, todayKey(), resolutionsByStore),
+    [byStore, master, aliasMap, resolutionsByStore]
   );
 
   const handleCopy = () => {
@@ -76,8 +80,23 @@ export default function Stock() {
 function ReorderList({ view }) {
   const navigate = useNavigate();
 
+  // 목록에 없다고 아무 일도 안 일어나는 게 아니다. 기다리는 중인 건 건수로 남긴다.
+  const waitingNote = view.waiting.length > 0 && (
+    <p className="stock-note">
+      발주완료 처리하고 입고를 기다리는 항목 <b>{view.waiting.length}건</b>은 이 목록에서 뺐습니다.
+      <span className="stock-note-sub">
+        {WAIT_DAYS}일이 지나도 ■입고가 없으면 다시 올라옵니다.
+      </span>
+    </p>
+  );
+
   if (view.reorder.length === 0) {
-    return <p className="empty-state">■주문에 올라온 항목이 없습니다.</p>;
+    return (
+      <>
+        {waitingNote}
+        <p className="empty-state">지금 시켜야 할 항목이 없습니다.</p>
+      </>
+    );
   }
 
   // 매장 칩을 누르면 종합 대시보드의 그 지점을 열고 발주 필요 칸까지 데려간다.
@@ -85,7 +104,9 @@ function ReorderList({ view }) {
   const goToStore = (storeId) => navigate(`/?store=${storeId}&focus=order`);
 
   return (
-    <div className="reorder-list">
+    <>
+      {waitingNote}
+      <div className="reorder-list">
       {view.reorder.map((row) => (
         <div key={row.name} className="reorder-card">
           <div className="reorder-head">
@@ -114,7 +135,8 @@ function ReorderList({ view }) {
           </div>
         </div>
       ))}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -129,6 +151,7 @@ function Matrix({ view }) {
       <div className="matrix-legend">
         <span><b className="cell-low">빨강</b> 임계치 미만</span>
         <span><b className="cell-order">파랑</b> 발주 대기</span>
+        <span><b className="cell-waiting">초록</b> 발주완료 · 입고 대기</span>
         <span><b className="cell-missing">—</b> 보고했으나 미기재</span>
         <span><b className="cell-none">·</b> 오늘 보고 없음</span>
       </div>
@@ -157,14 +180,25 @@ function Matrix({ view }) {
                     cls = 'cell-none';
                     text = '·';
                   } else if (c.qty === null) {
-                    cls = c.order ? 'cell-order' : 'cell-missing';
-                    text = c.order ? '발주' : '—';
+                    cls = c.order ? 'cell-order' : c.waiting ? 'cell-waiting' : 'cell-missing';
+                    text = c.order ? '발주' : c.waiting ? '대기' : '—';
                   } else {
-                    cls = c.low ? (c.order ? 'cell-order' : 'cell-low') : '';
+                    cls = c.low
+                      ? c.order
+                        ? 'cell-order'
+                        : c.waiting
+                          ? 'cell-waiting'
+                          : 'cell-low'
+                      : '';
                     text = `${c.qty}`;
                   }
+                  const title = c.order
+                    ? waitLabel(c.order.age)
+                    : c.waiting
+                      ? `발주완료 ${c.waiting.waitingDays}일째 · 입고 대기`
+                      : '';
                   return (
-                    <td key={it.name} className={`matrix-cell ${cls}`} title={c.order ? waitLabel(c.order.age) : ''}>
+                    <td key={it.name} className={`matrix-cell ${cls}`} title={title}>
                       {text}
                     </td>
                   );

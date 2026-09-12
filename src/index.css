@@ -3765,3 +3765,34 @@ button.reorder-store:hover .reorder-go {
     animation: none;
   }
 }
+
+/* ===== 재고 현황 — 도착 대기 ===== */
+/* 발주완료를 눌러 목록에서 내린 항목. 사라진 게 아니라는 것만 알리면 된다. */
+
+.stock-note {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  background: #f1f6f3;
+  border: 1px solid #d7e6dd;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #35604a;
+}
+
+.stock-note b {
+  font-weight: 700;
+}
+
+.stock-note-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.matrix-cell.cell-waiting,
+b.cell-waiting {
+  background: #e2f0e6;
+  color: #2f6b45;
+  font-weight: 700;
+}
