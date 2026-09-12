@@ -3718,3 +3718,50 @@ body {
     order: 3;
   }
 }
+
+/* ===== 발주 필요 → 지점 바로가기 ===== */
+/* 매장 칩이 버튼이 됐다. 생김새는 그대로 두고 누를 수 있다는 것만 알린다. */
+
+button.reorder-store {
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+button.reorder-store:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+button.reorder-store:active {
+  transform: translateY(1px);
+}
+
+.reorder-go {
+  font-weight: 700;
+  opacity: 0.35;
+  margin-left: 1px;
+}
+
+button.reorder-store:hover .reorder-go {
+  opacity: 0.75;
+}
+
+/* 링크로 들어온 직후 어느 칸을 보라는 건지 한 번 짚어준다 */
+.store-modal-section.section-flash {
+  animation: section-flash 1.4s ease-out;
+  border-radius: 8px;
+}
+
+@keyframes section-flash {
+  0%, 55% { background: #fff6d9; box-shadow: 0 0 0 6px #fff6d9; }
+  100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-modal-section.section-flash {
+    animation: none;
+  }
+}

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { STORES } from '../data/stores';
 import { useAllHandoffs, useNotices, useItems, useResolutions, useTrash, useTaskList } from '../hooks/useFirestore';
 import { buildPatrolList, summarize, todayKey, THRESHOLDS, cardClass } from '../lib/patrol';
@@ -157,7 +157,21 @@ export default function Dashboard() {
   const { notices } = useNotices();
   const { items: master } = useItems();
   const [showPaste, setShowPaste] = useState(false);
-  const [selected, setSelected] = useState(null);
+  // 어느 지점을 열었는지를 주소에 둔다 (`/?store=gyeyang`).
+  // 재고 현황·고장 현황에서 링크로 바로 열 수 있어야 하고,
+  // 뒤로 가기로 닫히는 편이 모달로서도 자연스럽다.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selected = searchParams.get('store');
+  const focus = searchParams.get('focus');
+
+  const setSelected = (id) => {
+    setSearchParams(id ? { store: id } : {}, { replace: true });
+  };
+
+  // 링크로 들어왔을 때 모달 안에서 볼 곳까지 데려다준다.
+  // 발주 필요는 지정석·월간점검 아래라 그냥 열면 화면에 안 걸린다.
+  const orderSectionRef = useRef(null);
+  const focusedRef = useRef(null);
   // 등록된 보고는 쌓일수록 길어져 아래 항목이 안 보인다. 최근 것만 두고 나머지는 접는다.
   const [showAllReports, setShowAllReports] = useState(false);
   const [showAll, setShowAll] = useState(true);
@@ -230,6 +244,23 @@ export default function Dashboard() {
   }, [selectedSeats, selectedStatus]);
 
   // '지금 시켜야 할 것'은 미도착 발주와 다르다. 재고가 임계치 미만인데 아직 안 시킨 품목.
+  // ?focus=order 로 들어오면 발주 필요 칸으로 스크롤하고 한 번 깜빡인다.
+  // 지점이 바뀌기 전까지 한 번만 움직인다 — 데이터가 갱신될 때마다 화면이 튀면 안 된다.
+  useEffect(() => {
+    if (focus !== 'order' || !selected) {
+      focusedRef.current = null;
+      return;
+    }
+    if (focusedRef.current === selected) return;
+    const el = orderSectionRef.current;
+    if (!el) return; // 모달이 아직 안 그려졌다. 다음 렌더에 다시 온다.
+    focusedRef.current = selected;
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    el.classList.add('section-flash');
+    const t = setTimeout(() => el.classList.remove('section-flash'), 1400);
+    return () => clearTimeout(t);
+  });
+
   const selectedStock = useMemo(
     () =>
       selected
@@ -569,7 +600,7 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className="store-modal-section">
+            <div className="store-modal-section" ref={orderSectionRef}>
               <div className="store-modal-label">
                 📦 발주 필요
                 <span className="label-sub">문자의 ■주문</span>

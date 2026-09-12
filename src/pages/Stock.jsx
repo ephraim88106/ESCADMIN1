@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { STORES } from '../data/stores';
 import { useAllHandoffs, useItems } from '../hooks/useFirestore';
 import { buildStockView, reorderToText, waitLabel, DEFAULT_THRESHOLD } from '../lib/stock';
@@ -73,9 +74,15 @@ export default function Stock() {
 
 /* ===== 발주 필요 목록 ===== */
 function ReorderList({ view }) {
+  const navigate = useNavigate();
+
   if (view.reorder.length === 0) {
     return <p className="empty-state">■주문에 올라온 항목이 없습니다.</p>;
   }
+
+  // 매장 칩을 누르면 종합 대시보드의 그 지점을 열고 발주 필요 칸까지 데려간다.
+  // 여기서 바로 발주완료를 누를 수 있어야 목록을 보다가 손이 끊기지 않는다.
+  const goToStore = (storeId) => navigate(`/?store=${storeId}&focus=order`);
 
   return (
     <div className="reorder-list">
@@ -87,7 +94,13 @@ function ReorderList({ view }) {
           </div>
           <div className="reorder-stores">
             {row.stores.map((s, i) => (
-              <div key={`${s.store.id}-${i}`} className={`reorder-store${s.kind === 'pending' ? ' pending' : ''}`}>
+              <button
+                type="button"
+                key={`${s.store.id}-${i}`}
+                className={`reorder-store${s.kind === 'pending' ? ' pending' : ''}`}
+                title={`${s.store.name} 열어서 발주완료 처리`}
+                onClick={() => goToStore(s.store.id)}
+              >
                 <span className="reorder-store-name">{s.store.name}</span>
                 <span className="reorder-qty">
                   {s.qty != null ? `${s.qty}${s.unit || ''}` : '수량 미기재'}
@@ -95,7 +108,8 @@ function ReorderList({ view }) {
                 {s.stock != null && <span className="reorder-stock">현재고 {s.stock}</span>}
                 {s.kind === 'pending' && <span className="reorder-wait">{waitLabel(s.age)}</span>}
                 {s.urgent && <span className="reorder-urgent">긴급</span>}
-              </div>
+                <span className="reorder-go">›</span>
+              </button>
             ))}
           </div>
         </div>
