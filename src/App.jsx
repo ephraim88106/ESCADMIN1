@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import Board from './components/Board';
 import Dashboard from './pages/Dashboard';
 import Stock from './pages/Stock';
+import Faults from './pages/Faults';
 import Schedule from './pages/Schedule';
 import Handoff from './pages/Handoff';
 import Notices from './pages/Notices';
@@ -18,6 +19,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/stock" element={<Stock />} />
+          <Route path="/faults" element={<Faults />} />
           <Route path="/store/:storeId/schedule" element={<Schedule />} />
           <Route path="/store/:storeId/tasks" element={<TaskListPage />} />
           <Route path="/store/:storeId/checklist" element={<Checklist />} />

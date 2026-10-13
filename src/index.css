@@ -3288,6 +3288,21 @@ body {
   gap: 8px;
 }
 
+/* 매장명 옆 주문담당자. 매장명이 주인공이므로 작고 흐리게 둔다. */
+.store-link-name {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.store-manager {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
 .nav-unread {
   background: var(--danger);
   color: #fff;
@@ -3556,4 +3571,228 @@ body {
 .handoff-card.linked-card {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* ===== 고장 현황 ===== */
+/* 재고 현황과 같은 자리·같은 무게로 읽히도록 발주 카드의 여백·모서리를 따른다. */
+
+.fault-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: baseline;
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: var(--text-muted, #667);
+}
+
+.fault-summary b {
+  font-size: 17px;
+  color: var(--text, #1a1f2b);
+}
+
+.fault-summary-stale,
+.fault-summary-stale b {
+  color: var(--danger, #d64545);
+}
+
+.fault-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fault-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--border, #e3e6ee);
+  border-radius: 10px;
+}
+
+.fault-row.is-resolved {
+  opacity: 0.6;
+}
+
+/* 방치 일수. 목록에서 제일 먼저 읽혀야 하는 값이라 왼쪽 고정폭에 둔다. */
+.fault-day {
+  flex: none;
+  min-width: 56px;
+  text-align: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: #eef0f5;
+  color: #5b6478;
+}
+
+.fault-day.lv-1 { background: #fdf3d6; color: #8a6100; }
+.fault-day.lv-2 { background: #fde3d3; color: #a8410f; }
+.fault-day.lv-3 { background: #fadcdc; color: #b12222; }
+.fault-day.done { background: #e2f0e6; color: #2f6b45; }
+
+.fault-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.fault-text {
+  font-weight: 600;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.fault-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--text-muted, #667);
+}
+
+/* 매장명은 눌러서 그 지점으로 넘어간다 — 버튼이지만 본문처럼 보이게 둔다. */
+.fault-store {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--primary, #2f6fed);
+  cursor: pointer;
+}
+
+.fault-store:hover {
+  text-decoration: underline;
+}
+
+.fault-store.as-text {
+  color: inherit;
+  cursor: default;
+}
+
+.fault-manager {
+  opacity: 0.75;
+}
+
+.fault-chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #eef0f5;
+  color: #5b6478;
+}
+
+.fault-chip.warn {
+  background: #fadcdc;
+  color: #b12222;
+}
+
+.fault-resolved {
+  margin-top: 22px;
+}
+
+.fault-resolved-toggle {
+  border: none;
+  background: none;
+  padding: 0 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-muted, #667);
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .fault-row {
+    flex-wrap: wrap;
+  }
+  .fault-body {
+    flex-basis: 100%;
+    order: 3;
+  }
+}
+
+/* ===== 발주 필요 → 지점 바로가기 ===== */
+/* 매장 칩이 버튼이 됐다. 생김새는 그대로 두고 누를 수 있다는 것만 알린다. */
+
+button.reorder-store {
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+button.reorder-store:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+button.reorder-store:active {
+  transform: translateY(1px);
+}
+
+.reorder-go {
+  font-weight: 700;
+  opacity: 0.35;
+  margin-left: 1px;
+}
+
+button.reorder-store:hover .reorder-go {
+  opacity: 0.75;
+}
+
+/* 링크로 들어온 직후 어느 칸을 보라는 건지 한 번 짚어준다 */
+.store-modal-section.section-flash {
+  animation: section-flash 1.4s ease-out;
+  border-radius: 8px;
+}
+
+@keyframes section-flash {
+  0%, 55% { background: #fff6d9; box-shadow: 0 0 0 6px #fff6d9; }
+  100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-modal-section.section-flash {
+    animation: none;
+  }
+}
+
+/* ===== 재고 현황 — 도착 대기 ===== */
+/* 발주완료를 눌러 목록에서 내린 항목. 사라진 게 아니라는 것만 알리면 된다. */
+
+.stock-note {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  background: #f1f6f3;
+  border: 1px solid #d7e6dd;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #35604a;
+}
+
+.stock-note b {
+  font-weight: 700;
+}
+
+.stock-note-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.matrix-cell.cell-waiting,
+b.cell-waiting {
+  background: #e2f0e6;
+  color: #2f6b45;
+  font-weight: 700;
 }
