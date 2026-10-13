@@ -4,7 +4,7 @@ import { getStoreById } from '../data/stores';
 import { useTaskList } from '../hooks/useFirestore';
 import CheckerConfirm from '../components/CheckerConfirm';
 
-const MONTHLY_CHECK_ITEMS = ['담요', '제빙기'];
+const MONTHLY_CHECK_ITEMS = ['담요', '제빙기', '필터청소', '디퓨저 보충'];
 
 function nowMs() {
   return Date.now();
@@ -38,11 +38,22 @@ function MonthlyCheckSection({ storeId }) {
   // 연달아 체크할 때 같은 이름을 계속 다시 치게 하지 않는다.
   const [checkerName, setCheckerName] = useState('');
 
+  /**
+   * 기본 항목 중 빠진 것을 채운다.
+   *
+   * 목록이 비었을 때만 채우면, 이미 쓰고 있던 지점은 나중에 늘어난 기본 항목을
+   * 영영 못 받는다. 17개 지점을 일일이 손으로 넣게 할 수는 없다.
+   *
+   * loading 은 첫 조회가 끝나야 꺼지므로, 이 시점의 items 는 실제 저장된 전부다.
+   */
   useEffect(() => {
-    if (loading || seeded.current || items.length > 0) return;
+    if (loading || seeded.current) return;
     seeded.current = true;
-    MONTHLY_CHECK_ITEMS.forEach((text) => addTask({ text, lastCheckedAt: null, checkedBy: '' }));
-  }, [loading, items.length, addTask]);
+    const existing = new Set(items.map((item) => (item.text || '').trim()));
+    for (const text of MONTHLY_CHECK_ITEMS) {
+      if (!existing.has(text)) addTask({ text, lastCheckedAt: null, checkedBy: '' });
+    }
+  }, [loading, items, addTask]);
 
   const handleCheck = (item) => {
     // 취소는 되돌리기다 — 이름을 다시 받을 이유가 없다
